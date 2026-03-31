@@ -1,54 +1,71 @@
-import { Link, Route, Routes, useLocation } from 'react-router-dom'
-import Home from './pages/Home.jsx'
-import Detail from './pages/Detail.jsx'
+import { useEffect, useState } from 'react'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import Login from './pages/auth/Login.jsx'
 import SignUp from './pages/auth/SignUp.jsx'
 import ForgotPassword from './pages/auth/ForgotPassword.jsx'
+import ClientDashboard from './pages/client/ClientDashboard.jsx'
+import ClientCreateFeedback from './pages/client/ClientCreateFeedback.jsx'
+import ClientFeedbackHistory from './pages/client/ClientFeedbackHistory.jsx'
+import AdminDashboard from './pages/admin/AdminDashboard.jsx'
+import AdminCustomers from './pages/admin/AdminCustomers.jsx'
+import AdminActivityLog from './pages/admin/AdminActivityLog.jsx'
+import { getSession, onSessionChange } from './lib/session.js'
 
-function AppShell({ children }) {
-  return (
-    <div className="min-h-screen bg-surface-page">
-      <header className="border-b border-border-input bg-surface-card px-4 py-4 sm:px-6">
-        <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3">
-          <h1 className="text-lg font-semibold text-content sm:text-xl">Smart Feedback Management System</h1>
-          <nav className="flex flex-wrap items-center gap-4 text-body-sm">
-            <Link to="/" className="text-content-muted hover:text-brand-teal">
-              Home
-            </Link>
-            <Link to="/login" className="auth-link">
-              Sign in
-            </Link>
-          </nav>
-        </div>
-      </header>
-      <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6">{children}</main>
-    </div>
-  )
+function defaultRouteByRole(role) {
+  return role === 'admin' ? '/admin/dashboard' : '/client/dashboard'
+}
+
+function RoleRoute({ user, allowedRole, element }) {
+  if (!user) return <Navigate to="/login" replace />
+  if (user.role !== allowedRole) return <Navigate to={defaultRouteByRole(user.role)} replace />
+  return element
 }
 
 export default function App() {
-  const location = useLocation()
-  const authOnly =
-    location.pathname === '/login' ||
-    location.pathname === '/signup' ||
-    location.pathname === '/forgot-password'
+  const [session, setSession] = useState(() => getSession())
+  useEffect(() => {
+    return onSessionChange(() => setSession(getSession()))
+  }, [])
 
-  if (authOnly) {
-    return (
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<SignUp />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-      </Routes>
-    )
-  }
+  const user = session?.user ?? null
 
   return (
-    <AppShell>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/feedback/:caseId" element={<Detail />} />
-      </Routes>
-    </AppShell>
+    <Routes>
+      <Route path="/login" element={!user ? <Login /> : <Navigate to={defaultRouteByRole(user.role)} replace />} />
+      <Route path="/signup" element={!user ? <SignUp /> : <Navigate to={defaultRouteByRole(user.role)} replace />} />
+      <Route
+        path="/forgot-password"
+        element={!user ? <ForgotPassword /> : <Navigate to={defaultRouteByRole(user.role)} replace />}
+      />
+
+      <Route
+        path="/client/dashboard"
+        element={<RoleRoute user={user} allowedRole="client" element={<ClientDashboard />} />}
+      />
+      <Route
+        path="/client/create-feedback"
+        element={<RoleRoute user={user} allowedRole="client" element={<ClientCreateFeedback />} />}
+      />
+      <Route
+        path="/client/feedback-history"
+        element={<RoleRoute user={user} allowedRole="client" element={<ClientFeedbackHistory />} />}
+      />
+
+      <Route
+        path="/admin/dashboard"
+        element={<RoleRoute user={user} allowedRole="admin" element={<AdminDashboard />} />}
+      />
+      <Route
+        path="/admin/customers"
+        element={<RoleRoute user={user} allowedRole="admin" element={<AdminCustomers />} />}
+      />
+      <Route
+        path="/admin/activity-log"
+        element={<RoleRoute user={user} allowedRole="admin" element={<AdminActivityLog />} />}
+      />
+
+      <Route path="/" element={<Navigate to={user ? defaultRouteByRole(user.role) : '/login'} replace />} />
+      <Route path="*" element={<Navigate to={user ? defaultRouteByRole(user.role) : '/login'} replace />} />
+    </Routes>
   )
 }

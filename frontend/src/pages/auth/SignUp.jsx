@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import AuthLayout from '../../layouts/AuthLayout.jsx'
 import * as authApi from '../../lib/authApi.js'
+import PasswordToggleButton from '../../components/auth/PasswordToggleButton.jsx'
+import { showError, showSuccess } from '../../lib/toast.js'
 
 const initialErrors = {
   fullName: '',
@@ -12,14 +14,16 @@ const initialErrors = {
 }
 
 export default function SignUp() {
+  const navigate = useNavigate()
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [agreeToTerms, setAgreeToTerms] = useState(false)
   const [errors, setErrors] = useState(initialErrors)
   const [submitting, setSubmitting] = useState(false)
-  const [status, setStatus] = useState(null)
 
   function validate() {
     const next = { ...initialErrors }
@@ -35,20 +39,20 @@ export default function SignUp() {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    setStatus(null)
     if (!validate()) return
     setSubmitting(true)
     try {
-      await authApi.signup({
+      const response = await authApi.signup({
         fullName: fullName.trim(),
         email: email.trim(),
         password,
         confirmPassword,
         agreeToTerms,
       })
-      setStatus({ type: 'success', message: 'Account created (check server console for payload).' })
+      showSuccess(response.message || 'Account created successfully.')
+      setTimeout(() => navigate('/login'), 700)
     } catch (err) {
-      setStatus({ type: 'error', message: err.message })
+      showError(err, 'Sign up failed.')
     } finally {
       setSubmitting(false)
     }
@@ -109,19 +113,26 @@ export default function SignUp() {
           <label htmlFor="signup-password" className="auth-label">
             Password
           </label>
-          <input
-            id="signup-password"
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            placeholder="Create a password"
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value)
-              if (errors.password) setErrors((s) => ({ ...s, password: '' }))
-            }}
-            className={`auth-input ${errors.password ? 'auth-input-error' : ''}`}
-          />
+          <div className="relative">
+            <input
+              id="signup-password"
+              name="password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="new-password"
+              placeholder="Create a password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value)
+                if (errors.password) setErrors((s) => ({ ...s, password: '' }))
+              }}
+              className={`auth-input pr-10 ${errors.password ? 'auth-input-error' : ''}`}
+            />
+            <PasswordToggleButton
+              isVisible={showPassword}
+              onClick={() => setShowPassword((s) => !s)}
+              controlsId="signup-password"
+            />
+          </div>
           {errors.password ? (
             <p className="mt-1.5 text-caption text-brand-red" role="alert">
               {errors.password}
@@ -133,19 +144,26 @@ export default function SignUp() {
           <label htmlFor="signup-confirm" className="auth-label">
             Confirm Password
           </label>
-          <input
-            id="signup-confirm"
-            name="confirmPassword"
-            type="password"
-            autoComplete="new-password"
-            placeholder="Confirm your password"
-            value={confirmPassword}
-            onChange={(e) => {
-              setConfirmPassword(e.target.value)
-              if (errors.confirmPassword) setErrors((s) => ({ ...s, confirmPassword: '' }))
-            }}
-            className={`auth-input ${errors.confirmPassword ? 'auth-input-error' : ''}`}
-          />
+          <div className="relative">
+            <input
+              id="signup-confirm"
+              name="confirmPassword"
+              type={showConfirmPassword ? 'text' : 'password'}
+              autoComplete="new-password"
+              placeholder="Confirm your password"
+              value={confirmPassword}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value)
+                if (errors.confirmPassword) setErrors((s) => ({ ...s, confirmPassword: '' }))
+              }}
+              className={`auth-input pr-10 ${errors.confirmPassword ? 'auth-input-error' : ''}`}
+            />
+            <PasswordToggleButton
+              isVisible={showConfirmPassword}
+              onClick={() => setShowConfirmPassword((s) => !s)}
+              controlsId="signup-confirm"
+            />
+          </div>
           {errors.confirmPassword ? (
             <p className="mt-1.5 text-caption text-brand-red" role="alert">
               {errors.confirmPassword}
@@ -162,7 +180,7 @@ export default function SignUp() {
                 setAgreeToTerms(e.target.checked)
                 if (errors.terms) setErrors((s) => ({ ...s, terms: '' }))
               }}
-              className="mt-0.5 h-4 w-4 shrink-0 rounded border-border-input accent-brand-teal focus:ring-brand-teal"
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-border-input accent-brand-gray focus:ring-brand-gray"
             />
             <span>
               I agree to the{' '}
@@ -181,17 +199,6 @@ export default function SignUp() {
             </p>
           ) : null}
         </div>
-
-        {status?.type === 'error' ? (
-          <p className="text-caption text-brand-red" role="alert">
-            {status.message}
-          </p>
-        ) : null}
-        {status?.type === 'success' ? (
-          <p className="text-caption text-content-muted" role="status">
-            {status.message}
-          </p>
-        ) : null}
 
         <button type="submit" className="auth-btn-primary" disabled={submitting}>
           {submitting ? 'Creating account…' : 'Create Account'}

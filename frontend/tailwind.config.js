@@ -4,17 +4,27 @@ export default {
   theme: {
     screens: {
       xs: '375px',
-      sm: '640px',
-      md: '768px',
-      lg: '1024px',
-      xl: '1280px',
-      '2xl': '1536px',
+      sm: '768px',
+      md: '1024px',
+      lg: '1280px',
+      xl: '1440px',
+      '2xl': '1500px',
+      '3xl': '1920px',
     },
     extend: {
+      width: {
+        'container-xs': '90%',
+        'container-sm': '720px',
+        'container-md': '960px',
+        'container-lg': '1152px',
+        'container-xl': '1280px',
+        'container-2xl': '1440px',
+        'container-3xl': '1640px',
+      },
       colors: {
         brand: {
           red: '#E30613',
-          teal: '#3AAFA9',
+          gray: '#93A2AF',
         },
         surface: {
           page: '#F2F2F2',
@@ -29,9 +39,23 @@ export default {
         },
       },
       fontFamily: {
+        inter: ['Inter', 'sans-serif'],
         sans: ['Inter', 'system-ui', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
       },
       fontSize: {
+        heading1: ['72px', '90px'],
+        heading2: ['60px', '72px'],
+        heading3: ['48px', '60px'],
+        heading4: ['36px', '44px'],
+        heading5: ['30px', '38px'],
+        heading5_b: ['26px', '34px'],
+        heading6: ['24px', '32px'],
+        subheading: ['20px', '30px'],
+        bodylarge: ['18px', '28px'],
+        bodysmall: ['16px', '24px'],
+        captionlarge: ['14px', '22px'],
+        captionsmall: ['12px', '18px'],
+        extrasmall: ['10px', '16px'],
         /** Page title / auth heading */
         'display-sm': ['1.5rem', { lineHeight: '2rem', fontWeight: '700' }],
         'display-md': ['1.75rem', { lineHeight: '2.25rem', fontWeight: '700' }],
@@ -43,6 +67,14 @@ export default {
         /** Helper / error */
         'caption': ['0.75rem', { lineHeight: '1rem' }],
       },
+      fontWeight: {
+        thin: '200',
+        light: '300',
+        normal: '400',
+        medium: '500',
+        semibold: '600',
+        bold: '700',
+      },
       maxWidth: {
         'auth-card': '28rem',
       },
@@ -50,12 +82,19 @@ export default {
         '18': '4.5rem',
       },
       accentColor: {
-        'brand-teal': '#3AAFA9',
+        'brand-gray': '#93A2AF',
       },
       boxShadow: {
         'auth-card': '0 1px 3px 0 rgb(0 0 0 / 0.04)',
       },
       borderRadius: {
+        '2xs': '2px',
+        xs: '4px',
+        sm: '6px',
+        md: '8px',
+        lg: '12px',
+        xl: '20px',
+        '2xl': '24px',
         'auth': '0.5rem',
         'auth-input': '0.375rem',
       },

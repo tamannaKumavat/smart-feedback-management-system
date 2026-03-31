@@ -8,10 +8,10 @@
 @layer base {
   :root {
     --color-brand-red: #e30613;
-    --color-brand-teal: #3aafaa;
-    --color-surface-page: #f2f2f2;
+    --color-brand-gray: #93a2af;
+    --color-surface-page: #f1f1f1;
     --color-surface-card: #ffffff;
-    --color-border-input: #c4c4c4;
+    --color-border-input: #c1c1c1;
     --color-content-muted: #666666;
   }
 
@@ -35,7 +35,7 @@
 
   .auth-input {
     @apply w-full rounded-auth-input border border-border-input px-3 py-2.5 text-body-md text-content placeholder:text-gray-400
-      focus:outline-none focus:ring-2 focus:ring-brand-teal/30 focus:border-brand-teal
+      focus:outline-none focus:ring-2 focus:ring-brand-gray/30 focus:border-brand-gray
       transition-colors;
   }
 
@@ -54,6 +54,6 @@
   }
 
   .auth-link {
-    @apply text-brand-teal font-medium hover:underline focus:outline-none focus:underline;
+    @apply text-brand-gray font-medium hover:underline focus:outline-none focus:underline;
   }
 }
