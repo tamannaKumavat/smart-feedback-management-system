@@ -17,14 +17,7 @@ export const adminDashboardData = {
       trend: [55, 54, 53, 40, 58, 42],
     },
   ],
-  hero: {
-    title: "Congratulations Henry Ryan!",
-    subtitle: "Best Agent of the Week",
-    resolved: 185,
-    hours: "26 h",
-    minutes: "12 m",
-  },
-  /** Shown in the center of the status donut */
+
   statusGrandTotal: 299,
   activeTickets: [
     {
@@ -70,7 +63,6 @@ export const adminDashboardData = {
       status: "unassigned",
     },
   ],
-  /** Donut + legend: same colors as ActiveTicketsCard header ● summary */
   statusBreakdown: [
     {
       label: "Pending",
@@ -91,7 +83,6 @@ export const adminDashboardData = {
       labelColor: TICKET_STATUS_CHART.resolved,
     },
   ],
-  /** Soft washed gradients (avoid harsh solid mint / blue) */
   performanceCards: [
     {
       id: "avgResolve",
@@ -119,7 +110,6 @@ export const adminDashboardData = {
       { label: "Sad", value: 6, color: "#CBD5E1" },
     ],
   },
-  /** Bars + %: same chart colors as header ● summary */
   solvedTicketsByDepartment: [
     {
       id: "product",
@@ -167,5 +157,15 @@ export const adminDashboardData = {
     { name: "Marketing", value: 62, color: "#34D399" },
     { name: "Support", value: 53, color: "#A78BFA" },
     { name: "Security", value: 34, color: "#F472B6" },
+  ],
+  ticketVolumeOverTime: [
+    { week: "W1", incoming: 42, resolved: 35 },
+    { week: "W2", incoming: 38, resolved: 36 },
+    { week: "W3", incoming: 55, resolved: 44 },
+    { week: "W4", incoming: 48, resolved: 46 },
+    { week: "W5", incoming: 62, resolved: 50 },
+    { week: "W6", incoming: 58, resolved: 55 },
+    { week: "W7", incoming: 45, resolved: 43 },
+    { week: "W8", incoming: 51, resolved: 49 },
   ],
 };

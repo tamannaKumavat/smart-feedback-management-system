@@ -23,8 +23,8 @@ export default {
       },
       colors: {
         brand: {
-          red: '#E30613',
-          gray: '#93A2AF',
+          red: 'var(--color-brand-red)',
+          gray: 'var(--color-brand-gray)',
         },
         pastel: {
           page: '#F5F7FA',
@@ -47,15 +47,40 @@ export default {
           accentSlate: '#9CA3AF',
         },
         surface: {
-          page: '#F5F7FA',
-          card: '#FFFFFF',
+          page: 'var(--color-surface-page)',
+          card: 'var(--color-surface-card)',
+          muted: 'var(--color-surface-muted)',
         },
         border: {
-          input: '#D1D5DB',
+          input: 'var(--color-border-input)',
+          subtle: 'var(--color-border-subtle)',
         },
         content: {
-          DEFAULT: '#374151',
-          muted: '#9CA3AF',
+          DEFAULT: 'var(--color-content)',
+          muted: 'var(--color-content-muted)',
+        },
+        /** Slate-style tokens used heavily in admin/client dashboards */
+        dashboard: {
+          border: 'var(--color-border-subtle)',
+          track: 'var(--color-track)',
+          heading: 'var(--color-text-primary)',
+          secondary: 'var(--color-text-secondary)',
+          body: 'var(--color-text-body)',
+          label: 'var(--color-text-label)',
+          caption: 'var(--color-text-caption)',
+        },
+        ticket: {
+          pending: 'var(--color-ticket-pending)',
+          unassigned: 'var(--color-ticket-unassigned)',
+          resolved: 'var(--color-ticket-resolved)',
+        },
+        chart: {
+          incoming: 'var(--color-chart-incoming)',
+          resolved: 'var(--color-chart-resolved)',
+        },
+        trend: {
+          positive: 'var(--color-trend-positive)',
+          negative: 'var(--color-trend-negative)',
         },
       },
       fontFamily: {
@@ -102,10 +127,12 @@ export default {
         '18': '4.5rem',
       },
       accentColor: {
-        'brand-gray': '#93A2AF',
+        'brand-gray': 'var(--color-brand-gray)',
       },
       boxShadow: {
         'auth-card': '0 1px 3px 0 rgb(0 0 0 / 0.04)',
+        card: 'var(--shadow-card)',
+        'card-soft': 'var(--shadow-card-soft)',
       },
       borderRadius: {
         '2xs': '2px',

@@ -6,7 +6,7 @@ import CustomerSatisfactionCard from "../../components/dashboard/admin/CustomerS
 import PerformanceCard from "../../components/dashboard/admin/PerformanceCard.jsx";
 import StatusCard from "../../components/dashboard/admin/StatusCard.jsx";
 import SummaryCard from "../../components/dashboard/admin/SummaryCard.jsx";
-import TopDepartmentsCard from "../../components/dashboard/admin/TopDepartmentsCard.jsx";
+import TicketVolume from "../../components/dashboard/admin/TicketVolume.jsx";
 
 export default function AdminDashboard() {
   return (
@@ -39,7 +39,7 @@ export default function AdminDashboard() {
 
         <div className="grid min-h-0 w-full flex-1 basis-0 grid-cols-1 gap-4 min-[480px]:grid-cols-3 min-[480px]:items-stretch">
           <div className="min-h-0 w-full min-w-0">
-            <CustomerSatisfactionCard
+          <CustomerSatisfactionCard
               satisfaction={adminDashboardData.satisfaction}
             />
           </div>
@@ -49,7 +49,7 @@ export default function AdminDashboard() {
             />
           </div>
           <div className="min-h-0 w-full min-w-0">
-            <TopDepartmentsCard departments={adminDashboardData.departments} />
+            <TicketVolume timeline={adminDashboardData.ticketVolumeOverTime} />
           </div>
         </div>
       </section>

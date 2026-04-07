@@ -1,6 +1,6 @@
-import { FiBell, FiSearch, FiSettings, FiShare2 } from 'react-icons/fi'
-import { Link } from 'react-router-dom'
-import WebLogo from './WebLogo.jsx'
+import { FiBell, FiSearch, FiSettings, FiShare2 } from "react-icons/fi";
+import { Link } from "react-router-dom";
+import WebLogo from "./WebLogo.jsx";
 
 function IconButton({ children, hasDot = false }) {
   return (
@@ -13,15 +13,18 @@ function IconButton({ children, hasDot = false }) {
         <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-brand-red" />
       ) : null}
     </button>
-  )
+  );
 }
 
-export default function Topbar() {
+export default function Topbar({ mode }) {
   return (
     <header className="sticky top-0 z-20 bg-surface-card/95 backdrop-blur">
       <div className="mx-auto flex h-16 items-center justify-between gap-4 px-4 sm:px-6">
         <Link to="/" className="inline-flex items-center gap-3">
           <WebLogo className="h-8 w-auto sm:h-10" />
+          <span className="hidden text-lg font-semibold text-content sm:inline">
+            {mode === "admin" ? "Admin Portal" : "Client Portal"}
+          </span>
         </Link>
 
         <div className="hidden max-w-[480px] flex-1 lg:flex">
@@ -51,5 +54,5 @@ export default function Topbar() {
         </div>
       </div>
     </header>
-  )
+  );
 }

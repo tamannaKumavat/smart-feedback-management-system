@@ -3,7 +3,7 @@ import KpiGraph from "../../components/dashboard/client/KpiGraph.jsx";
 import ProjectHistoryTable from "../../components/dashboard/client/ProjectHistoryTable.jsx";
 import ProjectStatus from "../../components/dashboard/client/ProjectStatus.jsx";
 import ResolvedTasks from "../../components/dashboard/client/ResolvedTasks.jsx";
-import StatCard from "../../components/StatCard.jsx";
+import StatCard from "../../components/dashboard/client/StatCard.jsx";
 import PortalLayout from "../../layouts/PortalLayout.jsx";
 
 const statCards = [
