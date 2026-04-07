@@ -9,10 +9,10 @@
   :root {
     --color-brand-red: #e30613;
     --color-brand-gray: #93a2af;
-    --color-surface-page: #f1f1f1;
+    --color-surface-page: #f5f7fa;
     --color-surface-card: #ffffff;
-    --color-border-input: #c1c1c1;
-    --color-content-muted: #666666;
+    --color-border-input: #d1d5db;
+    --color-content-muted: #9ca3af;
   }
 
   html {

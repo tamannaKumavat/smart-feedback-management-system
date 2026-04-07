@@ -1,0 +1,42 @@
+export const clientChatDummyData = [
+  {
+    id: "m1",
+    role: "user",
+    author: "You",
+    avatarUrl: "/user.png",
+    time: "10:02 AM",
+    text: "I couldn’t authenticate to the system. It keeps failing when I try to log in.",
+  },
+  {
+    id: "m2",
+    role: "assistant",
+    author: "Ruag AI Assistant",
+    avatarUrl: "/ruag-single.png",
+    time: "10:03 AM",
+    text: "Thanks for your feedback! Could you please provide more details? For example, are you seeing any error messages?",
+  },
+  {
+    id: "m3",
+    role: "user",
+    author: "You",
+    avatarUrl: "/user.png",
+    time: "10:04 AM",
+    text: "Yes, it says “authentication failed” after I enter my credentials.",
+  },
+  {
+    id: "m4",
+    role: "assistant",
+    author: "Ruag AI Assistant",
+    avatarUrl: "/ruag-single.png",
+    time: "10:05 AM",
+    text: "Got it, thank you! I’ve categorized this as a login issue and assigned it to the authentication team.",
+  },
+  // {
+  //   id: "m5",
+  //   role: "assistant",
+  //   author: "Ruag AI Assistant",
+  //   avatarUrl: "/ruag-single.png",
+  //   time: "10:06 AM",
+  //   text: "I’ll keep you updated as soon as we have progress. In the meantime, you can try resetting your password or clearing your browser cache 🙂",
+  // },
+];

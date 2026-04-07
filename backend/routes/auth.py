@@ -11,7 +11,6 @@ class LoginBody(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=1)
     remember_me: bool = Field(False, alias="rememberMe")
-
     model_config = {"populate_by_name": True}
 
 
