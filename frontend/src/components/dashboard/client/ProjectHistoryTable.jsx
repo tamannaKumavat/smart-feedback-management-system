@@ -5,7 +5,7 @@ export default function ProjectHistoryTable({
   rows = [],
   onViewDetail,
   dateLabel = "Date",
-  feedbackLabel = "Feedback",
+  feedbackLabel = "Ticket",
   statusLabel = "Status",
   actionLabel = "View detail",
 }) {
@@ -23,14 +23,16 @@ export default function ProjectHistoryTable({
         <span className="col-span-2 text-right"> </span>
       </div>
       <div className="min-h-0 flex-1 divide-y divide-[#F3F4F6] overflow-y-auto">
-        {rows.map((row) => (
+        {rows.map((row) => {
+          const detail = row.ticket ?? row.feedback;
+          return (
           <div
-            key={`${row.date}-${row.feedback}`}
+            key={`${row.date}-${detail}`}
             className="grid grid-cols-12 items-center gap-1 px-3 py-2 sm:gap-2 sm:px-4 sm:py-2.5"
           >
             <span className="col-span-2 text-[12px] text-[#6B7280] sm:text-[13px]">{row.date}</span>
             <span className="col-span-5 min-w-0 truncate text-[12px] font-medium text-[#111827] sm:text-[13px]">
-              {row.feedback}
+              {detail}
             </span>
             <span className="col-span-3">
               <span
@@ -50,7 +52,8 @@ export default function ProjectHistoryTable({
               </button>
             </span>
           </div>
-        ))}
+        );
+        })}
       </div>
     </article>
   );

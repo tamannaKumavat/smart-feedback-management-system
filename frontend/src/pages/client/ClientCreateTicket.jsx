@@ -4,7 +4,7 @@ import { FaRegShareFromSquare } from "react-icons/fa6";
 import PortalLayout from "../../layouts/PortalLayout.jsx";
 import { clientChatDummyData } from "../../data/clientChatDummyData.js";
 
-export default function ClientCreateFeedback() {
+export default function ClientCreateTicket() {
   const userAvatar = "/user.png";
   const assistantAvatar = "/ruag-single.png";
   const [messageInput, setMessageInput] = useState("");

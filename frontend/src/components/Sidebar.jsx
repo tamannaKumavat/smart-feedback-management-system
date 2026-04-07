@@ -57,15 +57,10 @@ export default function Sidebar({ mode, onLogout }) {
       icon: <FiPieChart size={16} />,
     },
     {
-      to: "/client/create-feedback",
-      label: "Create a Feedback",
+      to: "/client/create-ticket",
+      label: "Create a Ticket",
       icon: <FiEdit3 size={16} />,
     },
-   // {
-     // to: "/client/feedback-history",
-      //label: "Feedback History",
-      //icon: <FiClock size={16} />,
- //   },
   ];
 
   const primaryItems = mode === "admin" ? adminItems : clientItems;

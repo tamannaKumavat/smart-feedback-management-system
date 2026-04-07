@@ -76,12 +76,12 @@
   }
 
   .auth-input {
-    @apply w-full rounded-auth-input border border-border-input px-3 py-2.5 text-body-md text-content placeholder:text-gray-400 focus:border-brand-gray focus:outline-none focus:ring-2 focus:ring-brand-gray/30;
+    @apply w-full rounded-auth-input border border-border-input px-3 py-2.5 text-body-md text-content placeholder:text-gray-400 focus:border-brand-gray focus:outline-none focus:ring-2 focus:ring-gray-400/35;
     @apply transition-colors;
   }
 
   .auth-input-error {
-    @apply border-brand-red focus:border-brand-red focus:ring-brand-red/20;
+    @apply border-brand-red focus:border-brand-red focus:ring-2 focus:ring-red-500/25;
   }
 
   .auth-label {
@@ -89,7 +89,7 @@
   }
 
   .auth-btn-primary {
-    @apply w-full rounded-auth bg-brand-red px-4 py-3 text-body-md font-semibold text-white transition-opacity hover:opacity-[0.96] active:opacity-90 focus:outline-none focus:ring-2 focus:ring-brand-red/40 focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-60;
+    @apply w-full rounded-auth bg-brand-red px-4 py-3 text-body-md font-semibold text-white transition-opacity hover:opacity-[0.96] active:opacity-90 focus:outline-none focus:ring-2 focus:ring-red-600/40 focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-60;
   }
 
   .auth-link {

@@ -59,7 +59,6 @@ export default {
           DEFAULT: 'var(--color-content)',
           muted: 'var(--color-content-muted)',
         },
-        /** Slate-style tokens used heavily in admin/client dashboards */
         dashboard: {
           border: 'var(--color-border-subtle)',
           track: 'var(--color-track)',
