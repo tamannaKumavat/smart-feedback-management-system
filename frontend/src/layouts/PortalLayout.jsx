@@ -14,9 +14,9 @@ export default function PortalLayout({ mode, children }) {
   return (
     <div className="min-h-screen w-full">
       <Topbar onLogout={handleLogout} mode={mode} />
-      <div className="grid grid-cols-1 rounded-[16px] items-stretch md:grid-cols-[240px_1fr]">
+      <div className="grid grid-cols-1 rounded-[16px] items-stretch md:grid-cols-[200px_minmax(0,1fr)]">
         <Sidebar mode={mode} onLogout={handleLogout} />
-        <main className="min-h-0 min-w-0 overflow-x-hidden px-4 py-4 sm:px-6 sm:py-4  ">
+        <main className="min-h-0 min-w-0 overflow-x-hidden px-4 bg-surface-muted py-4 sm:px-6 sm:py-4 rounded-lg shadow-md ">
           {children}
         </main>
       </div>

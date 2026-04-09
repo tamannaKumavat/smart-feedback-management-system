@@ -71,7 +71,7 @@ export default function Sidebar({ mode, onLogout }) {
   const primaryItems = mode === "admin" ? adminItems : clientItems;
 
   return (
-    <aside className="sticky top-16 h-[calc(100vh-4rem)] bg-surface-card  rounded-lg">
+    <aside className="sticky top-16 h-[calc(100vh-4rem)] min-w-0 bg-white">
       <div className="flex h-full flex-col">
         <div className="flex-1 overflow-y-auto">
           <SidebarSection title="Menu" items={primaryItems} />
