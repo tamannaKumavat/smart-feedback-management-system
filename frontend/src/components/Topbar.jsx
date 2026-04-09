@@ -28,7 +28,7 @@ export default function Topbar({ mode }) {
         </Link>
 
         <div className="hidden max-w-[480px] flex-1 lg:flex">
-          <div className="flex h-11 w-full items-center gap-3 rounded-2xl bg-surface-page px-4">
+          <div className="flex h-11 w-full items-center gap-3 rounded-2xl bg-white px-4">
             <FiSearch className="text-content-muted" />
             <input
               type="text"

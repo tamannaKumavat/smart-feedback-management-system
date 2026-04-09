@@ -18,7 +18,7 @@ function itemClassName({ isActive }) {
 
 function SidebarSection({ title, items }) {
   return (
-    <div className="mt-6">
+    <div className="mt-6 ">
       <p className="mb-2 px-3 text-extrasmall font-medium uppercase tracking-wide text-content-muted/70">
         {title}
       </p>
@@ -61,12 +61,17 @@ export default function Sidebar({ mode, onLogout }) {
       label: "Create a Ticket",
       icon: <FiEdit3 size={16} />,
     },
+    {
+      to: "/client/ticket-history",
+      label: "Ticket history",
+      icon: <FiClock size={16} />,
+    },
   ];
 
   const primaryItems = mode === "admin" ? adminItems : clientItems;
 
   return (
-    <aside className="sticky top-16 h-[calc(100vh-4rem)] bg-surface-card ">
+    <aside className="sticky top-16 h-[calc(100vh-4rem)] bg-surface-card  rounded-lg">
       <div className="flex h-full flex-col">
         <div className="flex-1 overflow-y-auto">
           <SidebarSection title="Menu" items={primaryItems} />
@@ -75,7 +80,7 @@ export default function Sidebar({ mode, onLogout }) {
         <button
           type="button"
           onClick={onLogout}
-          className="mb-[12px] mt-3 inline-flex items-center gap-2 rounded-[2px] bg-surface-card px-3 py-2 text-left text-captionlarge font-medium text-content-muted shadow-sm hover:bg-surface-page hover:text-content"
+          className="mb-[12px] mt-3 inline-flex items-center gap-2 rounded-[2px] bg-surface-card px-3 py-2 text-left text-captionlarge font-medium text-content-muted hover:bg-surface-page hover:text-content"
         >
           <FiLogOut size={16} />
           Logout

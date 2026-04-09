@@ -285,7 +285,7 @@ export default function ProjectHistoryTable({
                   type="button"
                   onClick={() => toggleRow(row, rowId)}
                   aria-expanded={open}
-                  className="group flex w-full min-w-0 cursor-pointer items-center gap-2 border-0 px-3 py-2 text-left transition-colors hover:bg-[#F2F7FF] focus-visible:outline focus-visible:ring-2 focus-visible:ring-[#BFDBFE] focus-visible:ring-offset-2 sm:gap-4 sm:px-4 sm:py-2.5"
+                  className="group flex w-full min-w-0 cursor-pointer items-center gap-2 border-0 px-3 py-4 text-left transition-colors hover:bg-[#F2F7FF] focus-visible:outline focus-visible:ring-2 focus-visible:ring-[#BFDBFE] focus-visible:ring-offset-2 sm:gap-4 sm:px-4 sm:py-4"
                 >
                   <span
                     className={`${ROW_DATE_W} flex min-h-0 items-center text-left text-[12px] text-[#6B7280] sm:text-[13px]`}
@@ -322,7 +322,7 @@ export default function ProjectHistoryTable({
                 {open ? (
                   <div className="min-w-0 space-y-3  overflow-x-hidden border-t border-[#F3F4F6] bg-[#EEF2FA] p-6 sm:space-y-4 ">
                     {showShot ? (
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-5">
                         <img
                           src="/ticket-dummy.png"
                           alt="Ticket attachment screenshot"
