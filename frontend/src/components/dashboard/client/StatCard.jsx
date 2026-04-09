@@ -19,9 +19,11 @@ export default function StatCard({ title, value, trend, icon: Icon }) {
         <p className="text-xl font-bold leading-none tracking-tight text-[#111827] sm:text-2xl">
           {value}
         </p>
-        <span className="shrink-0 text-[11px] font-semibold tabular-nums text-[#2563EB] sm:text-[13px]">
-          {trend}
-        </span>
+        {trend ? (
+          <span className="max-w-[55%] shrink-0 text-right text-[11px] font-semibold leading-snug text-[#2563EB] sm:text-[13px]">
+            {trend}
+          </span>
+        ) : null}
       </div>
     </article>
   );
