@@ -1,6 +1,3 @@
-/**
- * Donut status breakdown (same pattern as client ProjectStatus): ring + center total + legend.
- */
 export default function StatusCard({ list, total }) {
   let acc = 0;
   const gradientStops = list
@@ -12,13 +9,19 @@ export default function StatusCard({ list, total }) {
     .join(", ");
 
   const displayTotal =
-    total !== undefined && total !== null ? total : list.reduce((s, i) => s + i.value, 0);
+    total !== undefined && total !== null
+      ? total
+      : list.reduce((s, i) => s + i.value, 0);
 
   return (
     <article className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-xl border border-[#F3F4F6] bg-white p-3 shadow-[0_4px_6px_-1px_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.04)] sm:p-4">
       <div className="mb-2 flex shrink-0 items-center justify-between gap-2 sm:mb-3">
-        <h3 className="text-[14px] font-bold text-[#111827] sm:text-[15px]">Total tickets by status</h3>
-        <span className="shrink-0 text-[11px] font-medium text-[#94A3B8] sm:text-[12px]">All agents ▾</span>
+        <h3 className="text-[14px] font-bold text-[#111827] sm:text-[15px]">
+          Total tickets by status
+        </h3>
+        <span className="shrink-0 text-[11px] font-medium text-[#94A3B8] sm:text-[12px]">
+          All agents ▾
+        </span>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 overflow-y-auto sm:gap-3">
@@ -49,7 +52,9 @@ export default function StatusCard({ list, total }) {
                   className="h-2 w-2 shrink-0 rounded-full sm:h-2.5 sm:w-2.5"
                   style={{ backgroundColor: item.color }}
                 />
-                <span className="truncate font-medium text-[#111827]">{item.label}</span>
+                <span className="truncate font-medium text-[#111827]">
+                  {item.label}
+                </span>
               </div>
               <span
                 className="shrink-0 font-semibold tabular-nums"

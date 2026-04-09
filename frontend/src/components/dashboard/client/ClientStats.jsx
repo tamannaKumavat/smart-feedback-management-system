@@ -10,7 +10,7 @@ const ICONS = {
 
 export default function ClientStats({ stats = [] }) {
   return (
-    <div className="grid w-full shrink-0 grid-cols-1 gap-4 min-[480px]:grid-cols-2 xl:grid-cols-4">
+    <div className="grid w-full min-w-0 shrink-0 grid-cols-1 gap-4 min-[480px]:grid-cols-2 xl:grid-cols-4">
       {stats.map((item) => {
         const Icon = ICONS[item.iconKey] ?? FiClipboard;
         const percent =

@@ -1,8 +1,8 @@
 export default function StatCard({ title, value, trend, icon: Icon }) {
   return (
-    <article className="flex w-full min-w-0 flex-col rounded-[4px] border border-[#F3F4F6] bg-gradient-to-br from-[#EEF4FF] via-[#F8FAFF] to-white p-3 shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05),0_2px_4px_-2px_rgba(0,0,0,0.04)] sm:p-4">
+    <article className="flex min-h-0 min-w-0 w-full flex-col rounded-xl border border-[#F3F4F6] bg-gradient-to-br from-[#EEF4FF] via-[#F8FAFF] to-white p-3 shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05),0_2px_4px_-2px_rgba(0,0,0,0.04)] sm:p-4">
       <div className="flex items-center gap-2 sm:gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[4px] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-[#F3F4F6] sm:h-10 sm:w-10">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-[#F3F4F6] sm:h-10 sm:w-10">
           {Icon ? (
             <Icon
               className="text-[18px] text-[#2563EB] sm:text-[20px]"
