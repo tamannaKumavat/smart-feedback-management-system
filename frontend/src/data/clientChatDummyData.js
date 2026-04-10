@@ -1,42 +1,29 @@
-export const clientChatDummyData = [
+export const createTicketChatSeed = [
   {
-    id: "m1",
+    kind: "date",
+    id: "sep-1",
+    label: "Fri, 10 Apr 2026",
+  },
+  {
+    kind: "message",
+    id: "u-1",
     role: "user",
     author: "You",
-    avatarUrl: "/user.png",
-    time: "10:02 AM",
-    text: "I couldn’t authenticate to the system. It keeps failing when I try to log in.",
+    time: "09:08",
+    text: "I can’t get into the dashboard since this morning. After SSO login I land on the dashboard URL but I immediately get HTTP 403 and I’m sent back to the login screen. I’m on Chrome and Edge, same behavior in a private window. I attached a HAR export from one attempt.",
+    file: "network-trace.har",
   },
   {
-    id: "m2",
+    kind: "confirmation",
+    id: "c-1",
     role: "assistant",
-    author: "Ruag AI Assistant",
-    avatarUrl: "/ruag-single.png",
-    time: "10:03 AM",
-    text: "Thanks for your feedback! Could you please provide more details? For example, are you seeing any error messages?",
+    author: "Ruag Team",
+    time: "09:14",
+    intro:
+      "Thanks for the detail. Here’s how we understand your request. Please confirm this is correct before we open the ticket.",
+    summary:
+      "You cannot access the main dashboard after single sign-on: the app returns HTTP 403 and redirects you back to login. The issue started today, reproduces in Chrome and Edge (including private mode), and you’ve provided a network trace for investigation.",
   },
-  {
-    id: "m3",
-    role: "user",
-    author: "You",
-    avatarUrl: "/user.png",
-    time: "10:04 AM",
-    text: "Yes, it says “authentication failed” after I enter my credentials.",
-  },
-  {
-    id: "m4",
-    role: "assistant",
-    author: "Ruag AI Assistant",
-    avatarUrl: "/ruag-single.png",
-    time: "10:05 AM",
-    text: "Got it, thank you! I’ve categorized this as a login issue and assigned it to the authentication team.",
-  },
-  // {
-  //   id: "m5",
-  //   role: "assistant",
-  //   author: "Ruag AI Assistant",
-  //   avatarUrl: "/ruag-single.png",
-  //   time: "10:06 AM",
-  //   text: "I’ll keep you updated as soon as we have progress. In the meantime, you can try resetting your password or clearing your browser cache 🙂",
-  // },
 ];
+
+export const clientChatDummyData = createTicketChatSeed;

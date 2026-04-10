@@ -27,7 +27,7 @@ export const ticketHistoryThreads = [
     date: "2026-04-10",
     timeAgo: "25m ago",
     preview:
-      "I can’t get into the dashboard — I keep getting a 403 error after I sign in with company SSO.",
+      "I can’t get into the dashboard. I keep getting a 403 error after I sign in with company SSO.",
     snippet:
       "Support summarized your login issue and asked you to confirm before opening the ticket.",
     channel: "email",
@@ -42,12 +42,12 @@ export const ticketHistoryThreads = [
         file: "/uploads/network-trace.har",
       },
       {
-        sender: "support",
+        sender: "Ruag team",
         content:
-          "Thanks for the detail and the HAR — that helps. Here’s how we understand your request. Please confirm this is correct before we open the ticket.",
+          "Thanks for the detail. Here’s how we understand your request. Please confirm this is correct before we open the ticket.",
         confirmationRequest: {
           summary:
-            "You cannot access the main dashboard after single sign-on: the app returns HTTP 403 and redirects you back to login. The issue started today, reproduces in Chrome and Edge (including private mode), and you’ve provided a network trace for investigation.",
+            "You cannot access the main dashboard after single sign-on: the app returns HTTP 403 and redirects you back to login. The issue started today, reproduces in Chrome and Edgea, and you’ve provided a network trace for investigation.",
         },
       },
     ],
@@ -76,7 +76,7 @@ export const ticketHistoryThreads = [
           "Our last invoice PDF is missing the suite number even though it shows correctly in account settings. Finance is blocking payment until PDF matches the PO line-for-line.",
       },
       {
-        sender: "support",
+        sender: "Ruag team",
         content:
           "Understood. Can you send the invoice number and the exact suite line as it should appear? We’ll verify the template mapping for PDF generation.",
       },
@@ -86,7 +86,7 @@ export const ticketHistoryThreads = [
           "Invoice INV-2026-0441. Suite should read “Suite 400” under billing address.",
       },
       {
-        sender: "support",
+        sender: "Ruag team",
         content:
           "Logged as template bug FIN-112. Fix targeted for tonight’s deploy; you’ll get a corrected PDF by email when it’s live.",
       },
@@ -117,7 +117,7 @@ export const ticketHistoryThreads = [
         file: "/uploads/sample-export-missing-cols.csv",
       },
       {
-        sender: "support",
+        sender: "Ruag team",
         content:
           "Thanks for the sample. Engineering confirms pagination drops custom field hydration past page 1. It’s queued for sprint ending Friday; I’ll post the build number here when it’s ready to test.",
       },
@@ -147,7 +147,7 @@ export const ticketHistoryThreads = [
           "On iPhone SE the ticket list horizontal scroll traps focus and the status chips overflow the viewport. WCAG concern for our audit.",
       },
       {
-        sender: "support",
+        sender: "Ruag team",
         content:
           "Reproduced on BrowserStack. CSS fix merged — overflow-x on list container removed, chips wrap. Please verify on 2.4.1 and reopen if anything still feels off.",
       },
@@ -182,12 +182,12 @@ export const ticketHistoryThreads = [
           "Our integration is hitting 429s during bulk sync even though we stay under the documented per-minute cap. Request IDs: req_a91, req_a92 (same second burst).",
       },
       {
-        sender: "support",
+        sender: "Ruag team",
         content:
           "We’re seeing burst traffic inside a single second that trips the per-second guardrail (separate from per-minute docs). I’m escalating to add clearer 429 bodies and a short backoff guide for bulk jobs.",
       },
       {
-        sender: "support",
+        sender: "Ruag team",
         content:
           "Update: rate limiter tuned in canary. Please retry with 200ms jitter between requests and tell us if 429s persist after 24h.",
       },
@@ -216,10 +216,6 @@ function formatThreadDateLabel(isoDate) {
   });
 }
 
-/**
- * Maps a thread’s `conversation` into UI rows for `ticket-history.jsx`
- * (date separator + bubbles; `outgoing` = user messages).
- */
 export function getTicketHistoryMessagesForThread(thread) {
   if (!thread?.conversation?.length) return [];
 
@@ -236,7 +232,7 @@ export function getTicketHistoryMessagesForThread(thread) {
 
   thread.conversation.forEach((turn, i) => {
     const outgoing = turn.sender === "user";
-    const sender = outgoing ? "You" : "Support";
+    const sender = outgoing ? "You" : "Ruag Team";
     const time = TIME_STAMPS[i % TIME_STAMPS.length];
     const id = `${thread.id}-m-${i}`;
 
