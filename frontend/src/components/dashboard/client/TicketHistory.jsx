@@ -15,6 +15,9 @@ import {
   getTicketHistoryMessagesForThread,
 } from "../../../data/clientTicketHistoryDummy.jsx";
 
+function formatMessageTime() {
+  return new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
 
 const hairline = "border-slate-200";
 const inputFocus =
@@ -242,7 +245,9 @@ export default function TicketHistory({
                 <TicketAvatar title={active.name} size="lg" />
                 <div className="min-w-0">
                   <p className="truncate text-[15px] font-semibold text-slate-900">{active.name}</p>
-                 
+                  <p className="truncate text-[12px] text-slate-500">
+                    {active.statusLine || (active.date ? `Created ${active.date}` : "Ticket thread")}
+                  </p>
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-0.5 text-slate-500">
@@ -265,7 +270,7 @@ export default function TicketHistory({
             <div
               className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white px-4 py-4 sm:px-6 ${scrollPretty}`}
             >
-              <div className="mx-auto max-w-[720px] space-y-2">
+              <div className="mx-auto max-w-[720px] space-y-4">
                 {messages.map((msg) => {
                   if (msg.isSeparator) {
                     return (

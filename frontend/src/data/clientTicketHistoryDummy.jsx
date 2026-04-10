@@ -4,153 +4,280 @@ export const ticketHistorySortOptions = [
   { value: "unread", label: "Unread first" },
 ];
 
+export const confirmationFollowUp = {
+  yes: {
+    userContent: "Yes",
+    supportContent:
+      "Thank you for confirming. Your ticket is now in progress. You can follow the status on your dashboard.",
+  },
+  no: {
+    userContent: "No",
+    supportContent:
+      "No problem. Please reply with what we should change in the summary, and we’ll update the ticket before moving forward.",
+  },
+};
+
 export const ticketHistoryThreads = [
   {
     id: "th-1",
-    name: "Matthew Anderson",
-    subject: "Fwd: Client resources",
-    snippet: "Thanks for the documents — I’ve shared them with the team.",
-    timeAgo: "5m ago",
-    hasAttachment: true,
-    starred: true,
-    channel: "whatsapp",
-    statusLine: "last seen recently",
+    ticketRef: "TKT-2401",
+    category: "Access & login",
+    name: "TKT-2401",
+    subject: "Access & login",
+    date: "2026-04-10",
+    timeAgo: "25m ago",
+    preview:
+      "I can’t get into the dashboard — I keep getting a 403 error after I sign in with company SSO.",
+    snippet:
+      "Support summarized your login issue and asked you to confirm before opening the ticket.",
+    channel: "email",
     unread: 1,
+    starred: true,
+    hasAttachment: true,
+    conversation: [
+      {
+        sender: "user",
+        content:
+          "I can’t get into the dashboard since this morning. After SSO login I land on the dashboard URL but I immediately get HTTP 403 and I’m sent back to the login screen. I’m on Chrome and Edge, same behavior in a private window. I attached a HAR export from one attempt.",
+        file: "/uploads/network-trace.har",
+      },
+      {
+        sender: "support",
+        content:
+          "Thanks for the detail and the HAR — that helps. Here’s how we understand your request. Please confirm this is correct before we open the ticket.",
+        confirmationRequest: {
+          summary:
+            "You cannot access the main dashboard after single sign-on: the app returns HTTP 403 and redirects you back to login. The issue started today, reproduces in Chrome and Edge (including private mode), and you’ve provided a network trace for investigation.",
+        },
+      },
+    ],
   },
   {
     id: "th-2",
-    name: "Sarah Chen",
-    subject: "Properties",
-    snippet: "Could you confirm the listing details before we publish?",
-    timeAgo: "1h ago",
-    hasAttachment: false,
-    starred: false,
-    channel: "messenger",
-    statusLine: "last seen 2h ago",
+    ticketRef: "TKT-2398",
+    category: "Billing",
+    name: "TKT-2398",
+    subject: "Billing",
+    date: "2026-04-09",
+    timeAgo: "3h ago",
+    preview:
+      "Our last invoice PDF is missing the suite number even though it shows correctly in account settings.",
+    snippet:
+      "Our last invoice PDF is missing the suite number even though it shows correctly in account settings.",
+    channel: "email",
+    statusLine: "Support replied · waiting on your confirmation",
     unread: 0,
+    starred: false,
+    hasAttachment: false,
+    conversation: [
+      {
+        sender: "user",
+        content:
+          "Our last invoice PDF is missing the suite number even though it shows correctly in account settings. Finance is blocking payment until PDF matches the PO line-for-line.",
+      },
+      {
+        sender: "support",
+        content:
+          "Understood. Can you send the invoice number and the exact suite line as it should appear? We’ll verify the template mapping for PDF generation.",
+      },
+      {
+        sender: "user",
+        content:
+          "Invoice INV-2026-0441. Suite should read “Suite 400” under billing address.",
+      },
+      {
+        sender: "support",
+        content:
+          "Logged as template bug FIN-112. Fix targeted for tonight’s deploy; you’ll get a corrected PDF by email when it’s live.",
+      },
+    ],
   },
   {
     id: "th-3",
-    name: "Support Bot",
-    subject: "Ticket #1042 — API rate limits",
-    snippet: "Your case has been escalated to engineering.",
-    timeAgo: "3h ago",
-    hasAttachment: true,
-    starred: false,
-    channel: "email",
-    statusLine: "",
+    ticketRef: "TKT-2392",
+    category: "Exports & reporting",
+    name: "TKT-2392",
+    subject: "Exports & reporting",
+    date: "2026-04-08",
+    timeAgo: "Yesterday",
+    preview:
+      "We need CSV export to include custom fields from org settings — right now those columns are always empty.",
+    snippet:
+      "We need CSV export to include custom fields from org settings — right now those columns are always empty.",
+    channel: "messenger",
+    statusLine: "You replied · support reviewing",
     unread: 0,
+    starred: false,
+    hasAttachment: true,
+    conversation: [
+      {
+        sender: "user",
+        content:
+          "We need CSV export to include custom fields from org settings — right now those columns are always empty on downloads over ~500 rows.",
+        file: "/uploads/sample-export-missing-cols.csv",
+      },
+      {
+        sender: "support",
+        content:
+          "Thanks for the sample. Engineering confirms pagination drops custom field hydration past page 1. It’s queued for sprint ending Friday; I’ll post the build number here when it’s ready to test.",
+      },
+    ],
   },
   {
     id: "th-4",
-    name: "James Porter",
-    subject: "Re: Invoice PDF",
-    snippet: "The footer overlap is fixed in the latest build.",
-    timeAgo: "Yesterday",
-    hasAttachment: false,
-    starred: true,
-    channel: "email",
-    statusLine: "last seen yesterday",
+    ticketRef: "TKT-2385",
+    category: "Mobile / UI",
+    name: "TKT-2385",
+    subject: "Mobile / UI",
+    date: "2026-04-07",
+    timeAgo: "Apr 7",
+    preview:
+      "On iPhone SE the ticket list horizontal scroll traps focus and the status chips overflow the viewport.",
+    snippet:
+      "On iPhone SE the ticket list horizontal scroll traps focus and the status chips overflow the viewport.",
+    channel: "whatsapp",
+    statusLine: "Closed · fix shipped in 2.4.1",
     unread: 0,
+    starred: true,
+    hasAttachment: false,
+    conversation: [
+      {
+        sender: "user",
+        content:
+          "On iPhone SE the ticket list horizontal scroll traps focus and the status chips overflow the viewport. WCAG concern for our audit.",
+      },
+      {
+        sender: "support",
+        content:
+          "Reproduced on BrowserStack. CSS fix merged — overflow-x on list container removed, chips wrap. Please verify on 2.4.1 and reopen if anything still feels off.",
+      },
+      {
+        sender: "user",
+        content:
+          "Confirmed on 2.4.1 — looks good. Thanks for the quick turnaround.",
+      },
+    ],
+  },
+  {
+    id: "th-5",
+    ticketRef: "TKT-2371",
+    category: "API & integrations",
+    name: "TKT-2371",
+    subject: "API & integrations",
+    date: "2026-04-05",
+    timeAgo: "Apr 5",
+    preview:
+      "Our integration is hitting 429s during bulk sync even though we stay under the documented per-minute cap.",
+    snippet:
+      "Our integration is hitting 429s during bulk sync even though we stay under the documented per-minute cap.",
+    channel: "email",
+    statusLine: "Escalated to engineering",
+    unread: 0,
+    starred: false,
+    hasAttachment: false,
+    conversation: [
+      {
+        sender: "user",
+        content:
+          "Our integration is hitting 429s during bulk sync even though we stay under the documented per-minute cap. Request IDs: req_a91, req_a92 (same second burst).",
+      },
+      {
+        sender: "support",
+        content:
+          "We’re seeing burst traffic inside a single second that trips the per-second guardrail (separate from per-minute docs). I’m escalating to add clearer 429 bodies and a short backoff guide for bulk jobs.",
+      },
+      {
+        sender: "support",
+        content:
+          "Update: rate limiter tuned in canary. Please retry with 200ms jitter between requests and tell us if 429s persist after 24h.",
+      },
+    ],
   },
 ];
 
-/** Rich message: `type: "property"` shows the listing card from the reference design. */
-export const ticketHistoryMessagesByThread = {
-  "th-1": [
+const TIME_STAMPS = [
+  "09:08",
+  "09:14",
+  "09:21",
+  "09:35",
+  "09:52",
+  "10:05",
+  "10:18",
+];
+
+function formatThreadDateLabel(isoDate) {
+  if (!isoDate) return "Conversation";
+  const d = new Date(`${isoDate}T12:00:00`);
+  return d.toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+/**
+ * Maps a thread’s `conversation` into UI rows for `ticket-history.jsx`
+ * (date separator + bubbles; `outgoing` = user messages).
+ */
+export function getTicketHistoryMessagesForThread(thread) {
+  if (!thread?.conversation?.length) return [];
+
+  const sepId = `${thread.id}-sep`;
+  const dateLabel = formatThreadDateLabel(thread.date);
+
+  const rows = [
     {
-      id: "m-1",
-      dateLabel: "Today, Jun 20",
+      id: sepId,
+      dateLabel,
       isSeparator: true,
     },
-    {
-      id: "m-2",
-      sender: "Matthew Anderson",
-      outgoing: false,
-      time: "05:00 pm",
+  ];
+
+  thread.conversation.forEach((turn, i) => {
+    const outgoing = turn.sender === "user";
+    const sender = outgoing ? "You" : "Support";
+    const time = TIME_STAMPS[i % TIME_STAMPS.length];
+    const id = `${thread.id}-m-${i}`;
+
+    if (turn.property) {
+      rows.push({
+        id,
+        sender,
+        outgoing,
+        time,
+        type: "property",
+        body: turn.content || "",
+        property: turn.property,
+        file: turn.file,
+      });
+      return;
+    }
+
+    if (turn.confirmationRequest?.summary) {
+      rows.push({
+        id,
+        sender,
+        outgoing: false,
+        time,
+        type: "confirmation",
+        body: turn.content ?? "",
+        summary: turn.confirmationRequest.summary,
+        file: turn.file,
+      });
+      return;
+    }
+
+    rows.push({
+      id,
+      sender,
+      outgoing,
+      time,
       type: "text",
-      body: "Hi John — sending over the property brief we discussed. Let me know if the pricing range still works for your clients.",
-    },
-    {
-      id: "m-3",
-      sender: "Matthew Anderson",
-      outgoing: false,
-      time: "05:02 pm",
-      type: "property",
-      body: "",
-      property: {
-        title: "Cozy Get Away",
-        location: "USA, New York City",
-        price: "$6,330.00",
-        imageHint: "house-pool",
-        beds: 1,
-        baths: 1,
-        areaSqft: 150,
-        tokenPrice: "$50",
-        irr: "12.3%",
-        apr: "10.5%",
-      },
-    },
-    {
-      id: "m-4",
-      sender: "John Wilson",
-      outgoing: true,
-      time: "05:20 pm",
-      type: "text",
-      body: "Looks great — numbers align with what we modeled. I’ll loop in finance for a quick sign-off tomorrow.",
-    },
-  ],
-  "th-2": [
-    {
-      id: "m-s1",
-      dateLabel: "Today, Jun 20",
-      isSeparator: true,
-    },
-    {
-      id: "m-s2",
-      sender: "Sarah Chen",
-      outgoing: false,
-      time: "02:15 pm",
-      type: "text",
-      body: "Hi — could you confirm square footage and parking before we go live on the portal?",
-    },
-    {
-      id: "m-s3",
-      sender: "John Wilson",
-      outgoing: true,
-      time: "02:40 pm",
-      type: "text",
-      body: "Confirmed: 1,240 sq ft, one reserved spot in the basement garage. I’ll update the listing draft.",
-    },
-  ],
-  "th-3": [
-    {
-      id: "m-b1",
-      dateLabel: "Yesterday, Jun 19",
-      isSeparator: true,
-    },
-    {
-      id: "m-b2",
-      sender: "Support Bot",
-      outgoing: false,
-      time: "09:12 am",
-      type: "text",
-      body: "Your ticket regarding API rate limits has been escalated to engineering (ref #ENG-8821).",
-    },
-  ],
-  "th-4": [
-    {
-      id: "m-p1",
-      dateLabel: "Jun 18",
-      isSeparator: true,
-    },
-    {
-      id: "m-p2",
-      sender: "James Porter",
-      outgoing: false,
-      time: "04:30 pm",
-      type: "text",
-      body: "Invoice PDF footer overlap is resolved in build 2.4.2 — please verify on your side.",
-    },
-  ],
-};
+      body: turn.content ?? "",
+      file: turn.file,
+    });
+  });
+
+  return rows;
+}
