@@ -41,7 +41,7 @@ export default function Home() {
           return (
             <Link
               key={item.case_id}
-              to={`/feedback/${item.case_id}`}
+              to={`/client/feedback/${item.case_id}`}
               className="block bg-white border border-gray-200 rounded-lg px-5 py-4 hover:border-gray-300 hover:shadow-sm transition"
             >
               <div className="flex items-center justify-between mb-1">
@@ -50,7 +50,7 @@ export default function Home() {
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${severityColors[severity] ?? severityColors.S4}`}>
                     {severity}
                   </span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium capitalize">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-brand-gray/15 text-brand-gray font-medium capitalize">
                     {item.status}
                   </span>
                 </div>

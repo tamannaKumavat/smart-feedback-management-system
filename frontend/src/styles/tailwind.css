@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-brand-red: #e30613;
+    --color-brand-gray: #93a2af;
+
+    /* Surfaces */
+    --color-surface-page: #f5f7fa;
+    --color-surface-card: #ffffff;
+    --color-surface-muted: #fafbfc;
+
+    /* Borders & dividers */
+    --color-border-subtle: #f3f4f6;
+    --color-border-input: #d1d5db;
+
+    /* Body text */
+    --color-content: #374151;
+    --color-content-muted: #9ca3af;
+
+    /* Dashboard typography */
+    --color-text-primary: #111827;
+    --color-text-secondary: #374151;
+    --color-text-body: #64748b;
+    --color-text-label: #94a3b8;
+    --color-text-caption: #475569;
+
+    /* Bars, pills, table chrome */
+    --color-track: #f1f5f9;
+
+    /* Semantic & charts */
+    --color-success: #34d399;
+    --color-success-strong: #22c55e;
+    --color-success-text: #047857;
+    --color-success-soft: #d1fae5;
+    --color-chart-incoming: #3b82f6;
+    --color-chart-resolved: #22c55e;
+    --color-trend-positive: #22c55e;
+    --color-trend-negative: #f97316;
+
+    /* Ticket status  */
+    --color-ticket-pending: #a78bfa;
+    --color-ticket-unassigned: #f59e0b;
+    --color-ticket-resolved: #34d399;
+
+    /* Client portal status dots  */
+    --color-client-progress: #1d79e8;
+    --color-client-resolved: #22dfa2;
+    --color-client-unassigned: #ff8a00;
+
+    /* Card elevation */
+    --shadow-card:
+      0 4px 6px -1px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.04);
+    --shadow-card-soft:
+      0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.04);
+  }
+
+  html {
+    @apply antialiased;
+  }
+
+  body {
+    @apply font-sans min-h-screen bg-surface-page text-content;
+  }
+}
+
+@layer components {
+  .auth-page {
+    @apply flex min-h-screen flex-col items-center justify-center bg-surface-page px-4 py-10 sm:px-6;
+  }
+
+  .auth-card {
+    @apply w-full max-w-auth-card rounded-auth border border-border-input bg-surface-card px-6 py-8 shadow-auth-card sm:px-8;
+  }
+
+  .auth-input {
+    @apply w-full rounded-auth-input border border-border-input px-3 py-2.5 text-body-md text-content placeholder:text-gray-400 focus:border-brand-gray focus:outline-none focus:ring-2 focus:ring-gray-400/35;
+    @apply transition-colors;
+  }
+
+  .auth-input-error {
+    @apply border-brand-red focus:border-brand-red focus:ring-2 focus:ring-red-500/25;
+  }
+
+  .auth-label {
+    @apply mb-1.5 block text-label text-content-muted;
+  }
+
+  .auth-btn-primary {
+    @apply w-full rounded-auth bg-brand-red px-4 py-3 text-body-md font-semibold text-white transition-opacity hover:opacity-[0.96] active:opacity-90 focus:outline-none focus:ring-2 focus:ring-red-600/40 focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-60;
+  }
+
+  .auth-link {
+    @apply font-medium text-brand-gray hover:underline focus:outline-none focus:underline;
+  }
+
+  .dashboard-card {
+    @apply rounded-xl border bg-surface-card p-3 sm:p-4;
+    border-color: var(--color-border-subtle);
+    box-shadow: var(--shadow-card);
+  }
+
+  .dashboard-card--soft-shadow {
+    box-shadow: var(--shadow-card-soft);
+  }
+}

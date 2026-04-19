@@ -1,19 +1,148 @@
-import { Routes, Route } from 'react-router-dom'
-import Home from './pages/Home.jsx'
-import Detail from './pages/Detail.jsx'
+import { useEffect, useState } from "react";
+import { Navigate, Route, Routes } from "react-router-dom";
+import Login from "./pages/auth/Login.jsx";
+import SignUp from "./pages/auth/SignUp.jsx";
+import ForgotPassword from "./pages/auth/ForgotPassword.jsx";
+import ClientDashboard from "./pages/client/ClientDashboard.jsx";
+import ClientCreateTicket from "./pages/client/ClientCreateTicket.jsx";
+import ClientTicketHistory from "./pages/client/ClientTicketHistory.jsx";
+import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
+import AdminCustomers from "./pages/admin/AdminCustomers.jsx";
+import AdminActivityLog from "./pages/admin/AdminActivityLog.jsx";
+import { getSession, onSessionChange } from "./lib/session.js";
+
+function defaultRouteByRole(role) {
+  return role === "admin" ? "/admin/dashboard" : "/client/dashboard";
+}
+
+function RoleRoute({ user, allowedRole, element }) {
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== allowedRole)
+    return <Navigate to={defaultRouteByRole(user.role)} replace />;
+  return element;
+}
 
 export default function App() {
+  const [session, setSession] = useState(() => getSession());
+  useEffect(() => {
+    return onSessionChange(() => setSession(getSession()));
+  }, []);
+
+  const user = session?.user ?? null;
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <h1 className="text-xl font-semibold text-gray-800">Smart Feedback Management Sytem</h1>
-      </header>
-      <main className="max-w-4xl mx-auto px-6 py-8">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/feedback/:caseId" element={<Detail />} />
-        </Routes>
-      </main>
-    </div>
-  )
+    <Routes>
+      <Route
+        path="/login"
+        element={
+          !user ? (
+            <Login />
+          ) : (
+            <Navigate to={defaultRouteByRole(user.role)} replace />
+          )
+        }
+      />
+      <Route
+        path="/signup"
+        element={
+          !user ? (
+            <SignUp />
+          ) : (
+            <Navigate to={defaultRouteByRole(user.role)} replace />
+          )
+        }
+      />
+      <Route
+        path="/forgot-password"
+        element={
+          !user ? (
+            <ForgotPassword />
+          ) : (
+            <Navigate to={defaultRouteByRole(user.role)} replace />
+          )
+        }
+      />
+
+      <Route
+        path="/client/dashboard"
+        element={
+          <RoleRoute
+            user={user}
+            allowedRole="client"
+            element={<ClientDashboard />}
+          />
+        }
+      />
+      <Route
+        path="/client/create-ticket"
+        element={
+          <RoleRoute
+            user={user}
+            allowedRole="client"
+            element={<ClientCreateTicket />}
+          />
+        }
+      />
+      <Route
+        path="/client/ticket-history"
+        element={
+          <RoleRoute
+            user={user}
+            allowedRole="client"
+            element={<ClientTicketHistory />}
+          />
+        }
+      />
+
+      <Route
+        path="/admin/dashboard"
+        element={
+          <RoleRoute
+            user={user}
+            allowedRole="admin"
+            element={<AdminDashboard />}
+          />
+        }
+      />
+      <Route
+        path="/admin/customers"
+        element={
+          <RoleRoute
+            user={user}
+            allowedRole="admin"
+            element={<AdminCustomers />}
+          />
+        }
+      />
+      <Route
+        path="/admin/activity-log"
+        element={
+          <RoleRoute
+            user={user}
+            allowedRole="admin"
+            element={<AdminActivityLog />}
+          />
+        }
+      />
+
+      <Route
+        path="/"
+        element={
+          <Navigate
+            to={user ? defaultRouteByRole(user.role) : "/login"}
+            replace
+          />
+        }
+      />
+      <Route
+        path="*"
+        element={
+          <Navigate
+            to={user ? defaultRouteByRole(user.role) : "/login"}
+            replace
+          />
+        }
+      />
+    </Routes>
+  );
 }

@@ -55,7 +55,7 @@ export default function Detail() {
 
   return (
     <div>
-      <Link to="/" className="text-sm text-blue-600 hover:underline mb-4 inline-block">
+      <Link to="/client/dashboard" className="text-sm text-brand-gray hover:underline mb-4 inline-block">
         &larr; Back to all feedback
       </Link>
 
@@ -66,7 +66,7 @@ export default function Detail() {
             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${severityColors[severity] ?? severityColors.S4}`}>
               {severity}
             </span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 font-medium capitalize">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-brand-gray/15 text-brand-gray font-medium capitalize">
               {intent}
             </span>
           </div>
@@ -81,7 +81,7 @@ export default function Detail() {
               <div
                 className={`max-w-lg px-4 py-2 rounded-2xl text-sm ${
                   msg.sender === 'user'
-                    ? 'bg-blue-600 text-white rounded-br-sm'
+                    ? 'bg-brand-red text-white rounded-br-sm'
                     : 'bg-gray-100 text-gray-800 rounded-bl-sm'
                 }`}
               >
@@ -95,7 +95,7 @@ export default function Detail() {
       <button
         onClick={handleProcess}
         disabled={processing}
-        className="bg-blue-600 text-white text-sm font-medium px-5 py-2.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+        className="bg-brand-red text-white text-sm font-medium px-5 py-2.5 rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition"
       >
         {processing ? 'Processing…' : 'Process with AI'}
       </button>
