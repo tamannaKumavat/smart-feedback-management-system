@@ -16,17 +16,11 @@ from backend.workflows.triage.prompt_templates import (
     chat_template_triage_support_level,
 )
 from backend.workflows.triage.constants import (
-    JUDGE_OK,
-    JUDGE_REFINE,
-    INCIDENT_ROUTE_HIGHER_LEVEL,
-    INCIDENT_ROUTE_LEVEL_1,
-    DECISION_CLARIFICATION,
-    DECISION_NOT_SOLVABLE,
-    DECISION_OK,
-    HUMAN_ASSESSMENT_OK,
-    HUMAN_ASSESSMENT_ADD_ADDITIONAL_CONTENT,
-    HUMAN_ASSESSMENT_REDO_TICKET
+    TriageJudgeDecision,
+    RAGEvaluationDecision,
+    HumanAssessment,
 )
+
 
 class TriageWorkflow:
     def __init__(self, chat_model: Any, judge_max_iterations: int = 2):
@@ -53,8 +47,13 @@ class TriageWorkflow:
         workflow.add_node("formulate_ticket_content", self.formulate_ticket_content)
         workflow.add_node("human_ticket_assessment", self.human_ticket_assessment)
         workflow.add_node("update_ticket", self.update_ticket)
-        workflow.add_node("add_additional_information_to_ticket", self.add_additional_information_to_ticket)
-        workflow.add_node("generate_ticket_created_response", self.generate_ticket_created_response)
+        workflow.add_node(
+            "add_additional_information_to_ticket",
+            self.add_additional_information_to_ticket,
+        )
+        workflow.add_node(
+            "generate_ticket_created_response", self.generate_ticket_created_response
+        )
 
         # Adding all the edges
         workflow.add_edge(START, "evaluate_rag_response")
@@ -62,9 +61,9 @@ class TriageWorkflow:
             "evaluate_rag_response",
             self.route_evaluate_rag,
             {
-                DECISION_OK: "rag_response_ok",
-                DECISION_CLARIFICATION: "rag_response_clarification",
-                DECISION_NOT_SOLVABLE: "triage_request",
+                RAGEvaluationDecision.OK: "rag_response_ok",
+                RAGEvaluationDecision.CLARIFICATION: "rag_response_clarification",
+                RAGEvaluationDecision.NOT_SOLVABLE: "triage_request",
             },
         )
         workflow.add_edge("rag_response_ok", END)
@@ -73,16 +72,19 @@ class TriageWorkflow:
         workflow.add_conditional_edges(
             "judge_triage_request",
             self.route_judge,
-            {JUDGE_OK: "formulate_ticket_content", JUDGE_REFINE: "triage_request"},
+            {
+                TriageJudgeDecision.OK: "formulate_ticket_content",
+                TriageJudgeDecision.REFINE: "triage_request",
+            },
         )
         workflow.add_edge("formulate_ticket_content", "human_ticket_assessment")
         workflow.add_conditional_edges(
             "human_ticket_assessment",
             self.route_human_assessment,
             {
-                HUMAN_ASSESSMENT_OK: "update_ticket",
-                HUMAN_ASSESSMENT_ADD_ADDITIONAL_CONTENT: "add_additional_information_to_ticket",
-                HUMAN_ASSESSMENT_REDO_TICKET: "triage_request"
+                HumanAssessment.OK: "update_ticket",
+                HumanAssessment.ADD_ADDITIONAL_CONTENT: "add_additional_information_to_ticket",
+                HumanAssessment.REDO_TICKET: "triage_request",
             },
         )
         workflow.add_edge("add_additional_information_to_ticket", "update_ticket")
@@ -106,12 +108,12 @@ class TriageWorkflow:
             "rag_decision": rag_decision,
             "chat_history": AIMessage(str(rag_decision.model_dump())),
         }
-    
+
     def human_ticket_assessment(self, state: TriageState) -> TriageState:
         # Simulate human assessment (e.g., check if ticket needs more info)
         # In a real app, this could be a human-in-the-loop API call or manual review
         # user_input: str = input()
-        assessment = HUMAN_ASSESSMENT_OK  # or HUMAN_ASSESSMENT_ADD_ADDITIONAL_CONTENT
+        assessment = HumanAssessment.OK  # or HUMAN_ASSESSMENT_ADD_ADDITIONAL_CONTENT
         return {"human_assessment": assessment}
 
     def add_additional_information_to_ticket(self, state: TriageState) -> str:
@@ -132,7 +134,7 @@ class TriageWorkflow:
             {
                 "user_query": state.get("user_query"),
                 "rag_results": state.get("rag_results"),
-                "clarification_response": state.get("incident_assessment_judge", "")
+                "clarification_response": state.get("incident_assessment_judge", ""),
             }
         )
         return {
@@ -185,9 +187,13 @@ class TriageWorkflow:
         }
 
     def route_judge(self, state: TriageState) -> str:
-        print(f"judge current iteration {self._judge_current_iteration} to max judge: {self.judge_max_iterations}")
+        print(
+            f"judge current iteration {self._judge_current_iteration} to max judge: {self.judge_max_iterations}"
+        )
         if self._judge_current_iteration >= self.judge_max_iterations:
-            return JUDGE_OK  # Max reached -> We just continue to not waste more time.
+            return (
+                TriageJudgeDecision.OK
+            )  # Max reached -> We just continue to not waste more time.
         return state["incident_assessment_judge"].overall_assessment
 
     def formulate_ticket_content(self, state: TriageState) -> TriageState:
@@ -205,17 +211,11 @@ class TriageWorkflow:
             "final_user_response": f"Ticket with id {state.get('ticket_id')} was successfully created!"
         }
 
-    def route_incidence_level(self, state: TriageState) -> int:
-        support_level = state.get("incident_assessment").support_level
-        if support_level == 1:
-            return INCIDENT_ROUTE_LEVEL_1
-        else:
-            return INCIDENT_ROUTE_HIGHER_LEVEL
-
     def run(self, user_query: str, rag_results: list = [], stream: bool = False):
         if stream:
             for chunk in self._workflow.stream(
-                {"user_query": user_query, "rag_results": rag_results}):
+                {"user_query": user_query, "rag_results": rag_results}
+            ):
                 print(chunk)
         else:
             final_result = self._workflow.invoke(
