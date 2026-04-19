@@ -76,4 +76,5 @@ class TriageState(TypedDict):
     rag_decision: RAGDecision = None
     incident_assessment: IncidentAssessment = None
     incident_assessment_judge: IncidentAssessmentJudge = None
+    human_assessment: str = ""
     ticket_id: str = ""

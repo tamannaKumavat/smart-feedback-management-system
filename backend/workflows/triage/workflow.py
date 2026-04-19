@@ -1,4 +1,3 @@
-from langchain_ollama import ChatOllama
 from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from typing import Any
@@ -24,10 +23,10 @@ from backend.workflows.triage.constants import (
     DECISION_CLARIFICATION,
     DECISION_NOT_SOLVABLE,
     DECISION_OK,
+    HUMAN_ASSESSMENT_OK,
+    HUMAN_ASSESSMENT_ADD_ADDITIONAL_CONTENT,
+    HUMAN_ASSESSMENT_REDO_TICKET
 )
-
-chat_model = ChatOllama(model="hf.co/unsloth/granite-4.0-h-tiny-GGUF:Q8_0")
-
 
 class TriageWorkflow:
     def __init__(self, chat_model: Any, judge_max_iterations: int = 2):
@@ -49,20 +48,15 @@ class TriageWorkflow:
         workflow.add_node("evaluate_rag_response", self.evaluate_rag_response)
         workflow.add_node("rag_response_clarification", self.rag_response_clarification)
         workflow.add_node("rag_response_ok", self.rag_response_ok)
-
         workflow.add_node("triage_request", self.triage_request)
         workflow.add_node("judge_triage_request", self.judge_triage_request)
-        workflow.add_node("decide_on_incidence_level", self.decide_on_incidence_level)
-        workflow.add_node("create_level_1_ticket", self.create_level_1_ticket)
-        workflow.add_node(
-            "handle_higher_level_support_tickets",
-            self.handle_higher_level_support_tickets,
-        )
-        workflow.add_node("add_ticket_to_database", self.add_ticket_to_database)
-        workflow.add_node("ticket_created_answer", self.ticket_created_answer)
+        workflow.add_node("formulate_ticket_content", self.formulate_ticket_content)
+        workflow.add_node("human_ticket_assessment", self.human_ticket_assessment)
+        workflow.add_node("update_ticket", self.update_ticket)
+        workflow.add_node("add_additional_information_to_ticket", self.add_additional_information_to_ticket)
+        workflow.add_node("generate_ticket_created_response", self.generate_ticket_created_response)
 
         # Adding all the edges
-
         workflow.add_edge(START, "evaluate_rag_response")
         workflow.add_conditional_edges(
             "evaluate_rag_response",
@@ -74,31 +68,27 @@ class TriageWorkflow:
             },
         )
         workflow.add_edge("rag_response_ok", END)
+        workflow.add_edge("rag_response_clarification", END)
         workflow.add_edge("triage_request", "judge_triage_request")
-        workflow.add_edge(
-            "rag_response_clarification", END
-        )  # This is for now just a placeholder. This should go to before the RAG was called.
         workflow.add_conditional_edges(
             "judge_triage_request",
             self.route_judge,
-            {JUDGE_OK: "decide_on_incidence_level", JUDGE_REFINE: "triage_request"},
+            {JUDGE_OK: "formulate_ticket_content", JUDGE_REFINE: "triage_request"},
         )
+        workflow.add_edge("formulate_ticket_content", "human_ticket_assessment")
         workflow.add_conditional_edges(
-            "decide_on_incidence_level",
-            self.route_incidence_level,
+            "human_ticket_assessment",
+            self.route_human_assessment,
             {
-                INCIDENT_ROUTE_LEVEL_1: "create_level_1_ticket",
-                INCIDENT_ROUTE_HIGHER_LEVEL: "handle_higher_level_support_tickets",
+                HUMAN_ASSESSMENT_OK: "update_ticket",
+                HUMAN_ASSESSMENT_ADD_ADDITIONAL_CONTENT: "add_additional_information_to_ticket",
+                HUMAN_ASSESSMENT_REDO_TICKET: "triage_request"
             },
         )
-        workflow.add_edge("create_level_1_ticket", "add_ticket_to_database")
-        workflow.add_edge(
-            "handle_higher_level_support_tickets", "add_ticket_to_database"
-        )
-        workflow.add_edge("add_ticket_to_database", "ticket_created_answer")
-        workflow.add_edge("ticket_created_answer", END)
+        workflow.add_edge("add_additional_information_to_ticket", "update_ticket")
+        workflow.add_edge("update_ticket", "generate_ticket_created_response")
+        workflow.add_edge("generate_ticket_created_response", END)
 
-        # Finally compile workflow
         self._workflow = workflow.compile()
 
     def evaluate_rag_response(self, state: TriageState) -> TriageState:
@@ -116,8 +106,22 @@ class TriageWorkflow:
             "rag_decision": rag_decision,
             "chat_history": AIMessage(str(rag_decision.model_dump())),
         }
+    
+    def human_ticket_assessment(self, state: TriageState) -> TriageState:
+        # Simulate human assessment (e.g., check if ticket needs more info)
+        # In a real app, this could be a human-in-the-loop API call or manual review
+        # user_input: str = input()
+        assessment = HUMAN_ASSESSMENT_OK  # or HUMAN_ASSESSMENT_ADD_ADDITIONAL_CONTENT
+        return {"human_assessment": assessment}
+
+    def add_additional_information_to_ticket(self, state: TriageState) -> str:
+        return state.get("human_assessment")
+
+    def route_human_assessment(self, state: TriageState) -> str:
+        return state.get("human_assessment")
 
     def route_evaluate_rag(self, state: TriageState) -> str:
+
         return state.get("rag_decision").decision
 
     def rag_response_clarification(self, state: TriageState) -> TriageState:
@@ -128,6 +132,7 @@ class TriageWorkflow:
             {
                 "user_query": state.get("user_query"),
                 "rag_results": state.get("rag_results"),
+                "clarification_response": state.get("incident_assessment_judge", "")
             }
         )
         return {
@@ -148,7 +153,7 @@ class TriageWorkflow:
     def triage_request(self, state: TriageState) -> TriageState:
         triage_request_chain = (
             chat_template_triage_support_level
-            | chat_model.with_structured_output(IncidentAssessment)
+            | self.chat_model.with_structured_output(IncidentAssessment)
         )
         judge_feedback: str = ""
         if self._judge_current_iteration > 0:
@@ -165,7 +170,7 @@ class TriageWorkflow:
     def judge_triage_request(self, state: TriageState) -> TriageState:
         triage_judge_chain = (
             chat_template_triage_judge
-            | chat_model.with_structured_output(IncidentAssessmentJudge)
+            | self.chat_model.with_structured_output(IncidentAssessmentJudge)
         )
         judged_incident_assessment = triage_judge_chain.invoke(
             {
@@ -180,37 +185,25 @@ class TriageWorkflow:
         }
 
     def route_judge(self, state: TriageState) -> str:
+        print(f"judge current iteration {self._judge_current_iteration} to max judge: {self.judge_max_iterations}")
         if self._judge_current_iteration >= self.judge_max_iterations:
             return JUDGE_OK  # Max reached -> We just continue to not waste more time.
         return state["incident_assessment_judge"].overall_assessment
 
-    def decide_on_incidence_level(self, state: TriageState) -> TriageState:
+    def formulate_ticket_content(self, state: TriageState) -> TriageState:
         return state
 
-    def add_ticket_to_database(self, state: TriageState) -> TriageState:
+    def update_ticket(self, state: TriageState) -> TriageState:
         """TODO: How do we handle created tickets? Do we save them in the database so we can use them in the future
         as responses?
         """
         print("TODO: Adding ticket to database - for future use")
         return state
 
-    def ticket_created_answer(self, state: TriageState):
+    def generate_ticket_created_response(self, state: TriageState):
         return {
             "final_user_response": f"Ticket with id {state.get('ticket_id')} was successfully created!"
         }
-
-    def create_level_1_ticket(self, state: TriageState) -> TriageState:
-        # TODO: We could create the summary of the message as incident
-        print("TODO: Create level 1 ticket and return the id")
-        return {"ticket_id": 9999}
-
-    def handle_higher_level_support_tickets(self, state: TriageState) -> TriageState:
-        """How should we handle higher support levels of incidents?
-        Should we have like a directory where the different departments are described and than assign it?
-        Should we do a human in the loop where the user can decide to which department the incident should be assigned to?
-        Or some default route - to a human in the support which assess it?
-        """
-        return {"ticket_id": 1111}
 
     def route_incidence_level(self, state: TriageState) -> int:
         support_level = state.get("incident_assessment").support_level
