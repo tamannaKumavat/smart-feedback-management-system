@@ -1,96 +1,214 @@
 from langgraph.graph import END, START, StateGraph
+from langchain_core.messages import AIMessage, HumanMessage
 from typing import Any
 
-from backend.workflows.smart_feedback.data_models import (
+from workflows.smart_feedback.data_models import (
     SmartFeedbackState,
     AnalysisAgentResult,
+    EngagementDecision,
 )
-from backend.workflows.triage.workflow import TriageWorkflow
-from backend.workflows.smart_feedback.prompt_templates import (
+from workflows.triage.workflow import TriageWorkflow
+from workflows.smart_feedback.prompt_templates import (
     chat_template_analysis_agent,
+    chat_template_engagement_entry,
+    chat_template_engagement_followup,
+    chat_template_engagement_rag,
 )
-from backend.workflows.smart_feedback.constants import AnswerCanBeGeneratedWithRAGResult
+from workflows.smart_feedback.rag_agent import RAGAgent, RELEVANCE_THRESHOLD
 
 
 class SmartFeedbackWorkflow:
-    """This is the main class where all the sub-workflows are coordinated.
-    If a user requests something, this workflow is triggered.
+    """Coordinates the full smart-feedback pipeline.
+
+    Graph flow:
+        START
+        engagement_with_user  [Phase 1 — entry point]
+                LLM decides: acknowledge (clear) OR ask clarification (vague)
+                needs_clarification=True ---> END
+                (clarifying question returned to user)
+                needs_clarification=False ---> create_ticket (placeholder)
+                then=> analysis_agent + rag_search_workflow ---(fan-in — both must finish)
+                 engagement_with_user  [Phase 2 — reply]
+                RAG sufficient---> END else  RAG insufficient --->triage_workflow ──► END
 
     Parameters:
-        chat_model: (Any): Is a langchain chat model integration. This can be anything like chat models specifically for watsonx or Ollama
+        chat_model (Any): A LangChain chat-model integration (e.g. ChatWatsonx).
     """
 
     def __init__(self, chat_model: Any):
         self.chat_model = chat_model
+        self._rag_agent = RAGAgent()
         self._workflow: StateGraph = None
+        self._generate_workflow()
 
     @property
     def workflow(self):
         return self._workflow
 
+    # Graph & Flow construction
     def _generate_workflow(self):
         workflow = StateGraph(SmartFeedbackState)
+
         workflow.add_node("engagement_with_user", self.engagement_with_user)
         workflow.add_node("create_ticket", self.create_ticket)
         workflow.add_node("analysis_agent", self.analysis_agent)
         workflow.add_node("rag_search_workflow", self.rag_search_workflow)
         workflow.add_node("triage_workflow", self.triage_workflow)
 
+        # Entry point
         workflow.add_edge(START, "engagement_with_user")
-        workflow.add_edge("engagement_with_user", "create_ticket")
-        workflow.add_edge("create_ticket", "analysis_agent")
-        workflow.add_edge("analysis_agent", "rag_search_workflow")
+
+        # After engagement Phase 1/2 — three possible routes
         workflow.add_conditional_edges(
-            "decide_answer_can_be_generated_from_rag_result",
-            self.decide_answer_can_be_generated_from_rag_result,
+            "engagement_with_user",
+            self._route_engagement,
             {
-                AnswerCanBeGeneratedWithRAGResult.YES: "engagement_with_user",
-                AnswerCanBeGeneratedWithRAGResult.NO: "triage_workflow",
+                "clarify": END,          # Phase 1: vague query — question returned to user
+                "proceed": "create_ticket",  # Phase 1: clear query — proceed through pipeline
+                "respond": END,          # Phase 2: RAG sufficient — answer returned to user
+                "triage": "triage_workflow", # Phase 2: RAG insufficient — escalate
             },
         )
+
+        # create_ticket fans out to BOTH agents in parallel
+        workflow.add_edge("create_ticket", "analysis_agent")
+        workflow.add_edge("create_ticket", "rag_search_workflow")
+
+        # Fan-in: engagement_with_user (Phase 2) runs only after BOTH complete
+        workflow.add_edge("analysis_agent", "engagement_with_user")
+        workflow.add_edge("rag_search_workflow", "engagement_with_user")
+
         workflow.add_edge("triage_workflow", END)
+
         self._workflow = workflow.compile()
 
-    def engagement_with_user(self, state: SmartFeedbackState):
-        """We need to decide how this engagement agent should look like. E.g. how we pass the different stuff e.g. the final result, clarifications, rag results to it."""
-        # Placeholder!
-        return state
+    # Routing
+    def _route_engagement(self, state: SmartFeedbackState) -> str:
+        """Called after every execution of engagement_with_user.
 
-    def create_ticket(self, state: SmartFeedbackState) -> dict:
-        """Here the functionality of creating a ticket should be added!"""
-        # Placeholder!
-        return state
+        Phase 1 (analysis_agent_result is None — parallel branches not yet run):
+          - "clarify"  if the LLM asked for more information
+          - "proceed"  if the query was understood
 
-    def analysis_agent(self, state: SmartFeedbackState) -> dict:
-        """The node for running the analysis agent. The return value will update the state of the analysis agent with the expected
-        AnalysisAgentResult object.
+        Phase 2 (analysis_agent_result is set — both parallel branches finished):
+          - "respond"  if RAG results are good enough to answer the user
+          - "triage"   if RAG results are insufficient and escalation is needed
         """
-        analysis_agent_chain = (
+        # Phase 1: parallel branches have not run yet
+        if state.get("analysis_agent_result") is None:
+            return "clarify" if state.get("needs_clarification", False) else "proceed"
+
+        # Phase 2: parallel branches completed — decide based on RAG quality
+        results = state.get("rag_results", [])
+        rag_sufficient = (
+            bool(results)
+            and max((r.get("score", 0.0) for r in results), default=0.0) >= RELEVANCE_THRESHOLD
+        )
+        return "respond" if rag_sufficient else "triage"
+    
+    # Engagement Agent  (entry point + final reply)
+    def engagement_with_user(self, state: SmartFeedbackState) -> dict:
+        """Phase 1 — entry point.
+
+        Uses structured output to decide whether to acknowledge the request
+        or ask a single clarifying question when the query is too vague.
+
+        Phase 2 — reply with RAG results.
+
+        Called again after analysis_agent and rag_search_workflow both finish.
+        Uses the retrieved context to compose a concrete answer for the user.
+        """
+        if state.get("analysis_agent_result") is not None:
+            #  Phase 2: compose answer from RAG context 
+            rag_results = state.get("rag_results", [])
+            rag_context = "\n\n".join(
+                f"[{r['source']}] {r['text']}" for r in rag_results
+            )
+            chain = chat_template_engagement_rag | self.chat_model
+            response: AIMessage = chain.invoke(
+                {"user_query": state["user_query"], "rag_context": rag_context}
+            )
+            return {
+                "engagement_response": response.content,
+                "chat_history": [response],
+            }
+
+        # Phase 1: warm greeting on first message, plain follow-up on subsequent ones
+        template = (
+            chat_template_engagement_entry
+            if state.get("is_first_message", True)
+            else chat_template_engagement_followup
+        )
+        chain = template | self.chat_model.with_structured_output(EngagementDecision)
+        decision: EngagementDecision = chain.invoke({"user_query": state["user_query"]})
+
+        return {
+            "needs_clarification": decision.needs_clarification,
+            "engagement_response": decision.response,
+            "chat_history": [
+                HumanMessage(content=state["user_query"]),
+                AIMessage(content=decision.response),
+            ],
+        }
+
+    # RAG Agent
+    def rag_search_workflow(self, state: SmartFeedbackState) -> dict:
+        """Searches the knowledge base for documents relevant to the user query.
+
+        Runs in parallel with analysis_agent after create_ticket.
+        Results are written to state["rag_results"] for Phase 2 of engagement.
+        """
+        results: list[dict] = self._rag_agent.search(
+            query=state["user_query"], top_k=3
+        )
+        return {"rag_results": results}
+
+    # Analysis Agent  (parallel with RAG)
+    def analysis_agent(self, state: SmartFeedbackState) -> dict:
+        """Classifies the user query by intent, sentiment, urgency and issue type.
+
+        Runs in parallel with rag_search_workflow after create_ticket.
+        Result triggers the fan-in back to engagement_with_user Phase 2.
+        """
+        chain = (
             chat_template_analysis_agent
             | self.chat_model.with_structured_output(AnalysisAgentResult)
         )
-        analysis_agent_result: AnalysisAgentResult = analysis_agent_chain.invoke(
-            {"user_query": state["user_query"]}
+        result: AnalysisAgentResult = chain.invoke({"user_query": state["user_query"]})
+        return {"analysis_agent_result": result}
+
+    # Remaining nodes
+    def create_ticket(self, _state: SmartFeedbackState) -> dict:
+        # Placeholder: ticket creation will be added in a follow-up.
+        return {}
+
+    def triage_workflow(self, state: SmartFeedbackState) -> dict:
+        triage = TriageWorkflow(self.chat_model)
+        final_state = triage.run(
+            user_query=state["user_query"],
+            rag_results=state.get("rag_results", []),
         )
-        return {"analysis_agent_result": analysis_agent_result}
+        return {"triage_workflow_state": final_state}
 
-    def decide_answer_can_be_generated_from_rag_result(self, state: SmartFeedbackState):
-        """Decides if an answer can be generated from the RAG results.
-        This can be through the check of found similarity scores or something like this.
-        This is the step which decides, if we go down to the triage agent.
-        """
-        # Placeholder!
-        return AnswerCanBeGeneratedWithRAGResult.NO
+    # Public entry point
+    def run(self, user_query: str, is_first_message: bool = True, stream: bool = False):
+        initial_state: SmartFeedbackState = {
+            "user_query": user_query,
+            "chat_history": [],
+            "is_first_message": is_first_message,
+            "needs_clarification": False,
+            "human_assessment": "",
+            "ticket_id": "",
+            "analysis_agent_result": None,
+            "rag_results": [],
+            "rag_workflow_state": {},
+            "triage_workflow_state": {},
+            "engagement_response": "",
+        }
 
-    def rag_search_workflow(self, state: SmartFeedbackState) -> dict:
+        if stream:
+            for chunk in self._workflow.stream(initial_state):
+                print(chunk)
+            return None
 
-        # Placeholder! Here the RAG workflow should be invoked and than returned!
-        return {"rag_workflow_state": {}}
-
-    def triage_workflow(self, state: SmartFeedbackState):
-        """Runs the triage workflow and returns the final state of the workflow to the smart feedback state."""
-        triage_workflow = TriageWorkflow(self.chat_model)
-        final_triage_state = triage_workflow.run(
-            user_query=state["user_query"], rag_results=state["rag_results"]
-        )
-        return {"triage_workflow_state": final_triage_state}
+        return self._workflow.invoke(initial_state)

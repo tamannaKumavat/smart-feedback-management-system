@@ -2,20 +2,20 @@ from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from typing import Any
 
-from backend.workflows.triage.data_models import (
+from workflows.triage.data_models import (
     TriageState,
     RAGDecision,
     IncidentAssessment,
     IncidentAssessmentJudge,
 )
-from backend.workflows.triage.prompt_templates import (
+from workflows.triage.prompt_templates import (
     chat_template_rag_evaluation,
     chat_template_rag_ok_response,
     chat_template_clarification_response,
     chat_template_triage_judge,
     chat_template_triage_support_level,
 )
-from backend.workflows.triage.constants import (
+from workflows.triage.constants import (
     TriageJudgeDecision,
     RAGEvaluationDecision,
     HumanAssessment,

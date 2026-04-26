@@ -31,6 +31,7 @@ export default function ClientCreateTicket() {
   const [messageInput, setMessageInput] = useState("");
   const [attachedFile, setAttachedFile] = useState(null);
   const [confirmationDone, setConfirmationDone] = useState(false);
+  const [isFirstMessage, setIsFirstMessage] = useState(true);
   const fileInputRef = useRef(null);
   const scrollRef = useRef(null);
 
@@ -53,6 +54,7 @@ export default function ClientCreateTicket() {
     setConfirmationDone(false);
     setMessageInput("");
     setAttachedFile(null);
+    setIsFirstMessage(true);
   }
 
   function handleShare() {
@@ -111,32 +113,59 @@ export default function ClientCreateTicket() {
     setConfirmationDone(true);
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     const trimmedInput = messageInput.trim();
     if (!trimmedInput && !attachedFile) return;
 
     const t = formatNowTime();
+    const userText = trimmedInput || `Attached: ${attachedFile?.name}`;
     const userLine = {
       kind: "message",
       id: `u-${Date.now()}`,
       role: "user",
       author: "You",
       time: t,
-      text: trimmedInput || `Attached: ${attachedFile?.name}`,
+      text: userText,
       file: attachedFile ? attachedFile.name : undefined,
     };
-    const assistantLine = {
+    const loadingId = `a-${Date.now()}`;
+    const loadingLine = {
       kind: "message",
-      id: `a-${Date.now()}`,
+      id: loadingId,
       role: "assistant",
       author: "Ruag Team",
       time: t,
-      text: "Thanks, we’ve logged your message. A specialist will follow up here shortly.",
+      text: "…",
     };
-    setMessages((prev) => [...prev, userLine, assistantLine]);
+
+    setMessages((prev) => [...prev, userLine, loadingLine]);
     setMessageInput("");
     setAttachedFile(null);
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_query: userText, is_first_message: isFirstMessage }),
+      });
+      setIsFirstMessage(false);
+      const data = await res.json().catch(() => ({}));
+      const reply = res.ok
+        ? (data.response || "Thank you for your message. We’ll follow up shortly.")
+        : (data.detail || "Something went wrong. Please try again.");
+      setMessages((prev) =>
+        prev.map((m) => (m.id === loadingId ? { ...m, text: reply } : m))
+      );
+    } catch {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === loadingId
+            ? { ...m, text: "Could not reach the server. Please try again." }
+            : m
+        )
+      );
+    }
   }
 
   function Avatar({ src, label }) {

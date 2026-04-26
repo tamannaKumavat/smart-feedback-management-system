@@ -4,3 +4,8 @@ email-validator==2.2.0
 ibm-watsonx-ai==1.5.3
 python-dotenv==1.0.1
 langchain-ibm
+langchain-core
+langgraph
+pydantic
+numpy
+typing-extensions
