@@ -3,6 +3,7 @@ import {
   FiActivity,
   FiClock,
   FiEdit3,
+  FiFileText,
   FiLogOut,
   FiPieChart,
   FiUsers,
@@ -60,6 +61,11 @@ export default function Sidebar({ mode, onLogout }) {
       to: "/client/create-ticket",
       label: "Create a Ticket",
       icon: <FiEdit3 size={16} />,
+    },
+    {
+      to: "/client/drafts",
+      label: "Drafts",
+      icon: <FiFileText size={16} />,
     },
     {
       to: "/client/ticket-history",

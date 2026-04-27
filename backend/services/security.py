@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -46,10 +46,7 @@ def decode_access_token(token: str) -> dict[str, Any]:
     return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
 
 
-def get_current_user(
-    token: str | None = Depends(oauth2_scheme),
-    db: Session = Depends(get_db),
-) -> User:
+def _resolve_user(token: str | None, db: Session) -> User:
     credentials_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -69,3 +66,24 @@ def get_current_user(
     if user is None:
         raise credentials_error
     return user
+
+
+def get_current_user(
+    token: str | None = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> User:
+    return _resolve_user(token, db)
+
+
+def get_current_user_with_query_token(
+    token: str | None = Depends(oauth2_scheme),
+    query_token: str | None = Query(default=None, alias="token"),
+    db: Session = Depends(get_db),
+) -> User:
+    """Like ``get_current_user`` but accepts the JWT via ``?token=`` too.
+
+    Use this only for read-only file/media routes that need to be
+    referenced from a plain ``<img src>`` or ``<a href>`` (which can't
+    set request headers). The header takes precedence.
+    """
+    return _resolve_user(token or query_token, db)

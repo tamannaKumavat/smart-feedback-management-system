@@ -1,8 +1,34 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaRegShareFromSquare } from "react-icons/fa6";
-import { FiPaperclip, FiPlus, FiSend, FiSmile } from "react-icons/fi";
+import { FiPaperclip, FiPlus, FiSend, FiSmile, FiX } from "react-icons/fi";
 import PortalLayout from "../../layouts/PortalLayout.jsx";
-import { createTicketChatSeed } from "../../data/clientChatDummyData.js";
+import {
+  attachmentDownloadUrl,
+  confirmSummary,
+  createChat,
+  getMessages,
+  markChatAsDraft,
+  resumeChat,
+  sendMessageStream,
+  uploadAttachment,
+} from "../../lib/chatApi.js";
+import { showError, showSuccess } from "../../lib/toast.js";
+
+const MAX_UPLOAD_MB = 10;
+const ALLOWED_PREFIXES = ["image/", "application/pdf", "text/"];
+
+function isAllowedMime(mime) {
+  if (!mime) return false;
+  return ALLOWED_PREFIXES.some((p) => mime.startsWith(p));
+}
+
+function formatBytes(n) {
+  if (!n) return "0 B";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 const userAvatar = "/user.png";
 const teamAvatar = "/ruag-single.png";
@@ -15,29 +41,166 @@ const btnYes =
   "rounded-full bg-[#3E8E91] px-4 py-2 text-[12px] font-semibold text-white shadow-sm transition hover:brightness-[0.95]";
 const btnNo =
   "rounded-full border border-slate-200 bg-white px-4 py-2 text-[12px] font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50";
-const linkAttach = "text-[12px] font-medium text-[#3E8E91] hover:underline";
 const scrollPretty =
   "[scrollbar-width:thin] [scrollbar-color:rgb(203_213_225/0.65)_transparent] [&::-webkit-scrollbar]:w-[6px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300/40 hover:[&::-webkit-scrollbar-thumb]:bg-slate-400/50";
 
-function formatNowTime() {
-  return new Date().toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+function formatTime(iso) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleTimeString(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+}
+
+function AttachmentChip({ attachment }) {
+  const href = attachmentDownloadUrl(attachment.id);
+  const isImage = attachment.mimeType?.startsWith("image/");
+  if (isImage) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block max-w-[260px] overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
+      >
+        <img
+          src={href}
+          alt={attachment.filename}
+          className="block max-h-48 w-full object-cover"
+          loading="lazy"
+        />
+        <div className="flex items-center justify-between gap-2 px-2 py-1 text-[11px] text-slate-500">
+          <span className="truncate">{attachment.filename}</span>
+          <span className="shrink-0">{formatBytes(attachment.sizeBytes)}</span>
+        </div>
+      </a>
+    );
+  }
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-100"
+    >
+      <FiPaperclip className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      <span className="truncate font-medium">{attachment.filename}</span>
+      <span className="shrink-0 text-slate-400">
+        {formatBytes(attachment.sizeBytes)}
+      </span>
+    </a>
+  );
+}
+
+function Avatar({ src, label }) {
+  return (
+    <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-[#d8dce4] bg-white">
+      {src ? (
+        <img src={src} alt={label} className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-[#6b7280]">
+          {label?.[0] ?? "?"}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function ClientCreateTicket() {
-  const [messages, setMessages] = useState(() => [...createTicketChatSeed]);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const resumeId = searchParams.get("chatId");
+
+  const [chat, setChat] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [streamingDraft, setStreamingDraft] = useState(null);
   const [messageInput, setMessageInput] = useState("");
-  const [attachedFile, setAttachedFile] = useState(null);
-  const [confirmationDone, setConfirmationDone] = useState(false);
-  const fileInputRef = useRef(null);
+  const [sending, setSending] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [pendingFile, setPendingFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
   const scrollRef = useRef(null);
+  const chatRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  // Keep a ref so the unmount cleanup sees the latest chat without
+  // re-running the effect on every chat change.
+  useEffect(() => {
+    chatRef.current = chat;
+  }, [chat]);
+
+  // Resume an existing draft if one was passed via the URL; otherwise
+  // start a fresh blank chat (lazily — actual creation happens on first
+  // send so a user that bounces leaves no empty rows behind).
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (!resumeId) {
+        setChat(null);
+        setMessages([]);
+        setStreamingDraft(null);
+        return;
+      }
+      try {
+        const [resumed, history] = await Promise.all([
+          resumeChat(resumeId),
+          getMessages(resumeId),
+        ]);
+        if (cancelled) return;
+        setChat(resumed.chat);
+        setMessages(history.messages || []);
+        setStreamingDraft(null);
+      } catch (err) {
+        if (cancelled) return;
+        showError(err, "Could not resume chat");
+        setSearchParams({}, { replace: true });
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [resumeId, setSearchParams]);
+
+  // If the user navigates away mid-conversation, demote to draft so it
+  // shows up in /client/drafts. Closed chats are skipped server-side.
+  useEffect(() => {
+    return () => {
+      const current = chatRef.current;
+      if (!current) return;
+      if (current.status === "active" || current.status === "waiting_confirmation") {
+        markChatAsDraft(current.id);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [messages, streamingDraft]);
+
+  const latestSummaryId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.sender === "ai" && m.aiAnswerType === "summary") return m.id;
+    }
+    return null;
   }, [messages]);
+
+  const awaitingConfirmation = chat?.status === "waiting_confirmation";
+  const chatClosed = chat?.status === "closed";
+
+  const ensureChat = useCallback(async () => {
+    if (chat) return chat;
+    const created = await createChat();
+    setChat(created.chat);
+    return created.chat;
+  }, [chat]);
 
   function handleOpenFilePicker() {
     fileInputRef.current?.click();
@@ -45,14 +208,152 @@ export default function ClientCreateTicket() {
 
   function handleFileChange(event) {
     const file = event.target.files?.[0];
-    setAttachedFile(file ?? null);
+    event.target.value = "";
+    if (!file) return;
+    if (!isAllowedMime(file.type)) {
+      showError(
+        "Only images, PDFs and text files are supported as attachments.",
+      );
+      return;
+    }
+    if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
+      showError(`Files must be smaller than ${MAX_UPLOAD_MB} MB.`);
+      return;
+    }
+    setPendingFile(file);
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    const trimmed = messageInput.trim();
+    if ((!trimmed && !pendingFile) || sending) return;
+    if (chatClosed) {
+      showError("This chat is closed. Start a new one.");
+      return;
+    }
+    if (awaitingConfirmation) {
+      showError("Please confirm or reject the summary above first.");
+      return;
+    }
+
+    setSending(true);
+    const contentToSend = trimmed || `Attached: ${pendingFile?.name ?? "file"}`;
+    const fileToSend = pendingFile;
+    setMessageInput("");
+    setPendingFile(null);
+
+    let activeChat;
+    try {
+      activeChat = await ensureChat();
+    } catch (err) {
+      setSending(false);
+      showError(err, "Could not start chat");
+      return;
+    }
+
+    let attachmentIds = [];
+    if (fileToSend) {
+      setUploading(true);
+      try {
+        const att = await uploadAttachment({
+          chatId: activeChat.id,
+          file: fileToSend,
+        });
+        attachmentIds = [att.id];
+      } catch (err) {
+        setUploading(false);
+        setSending(false);
+        showError(err, "Upload failed");
+        setPendingFile(fileToSend);
+        return;
+      } finally {
+        setUploading(false);
+      }
+    }
+
+    setStreamingDraft({ id: "streaming", content: "" });
+
+    try {
+      await sendMessageStream(
+        { chatId: activeChat.id, content: contentToSend, attachmentIds },
+        {
+          onUserMessage: (msg) => {
+            setMessages((prev) => [...prev, msg]);
+          },
+          onToken: (chunk) => {
+            setStreamingDraft((prev) =>
+              prev ? { ...prev, content: prev.content + chunk } : prev,
+            );
+          },
+          onDone: ({ chat: updatedChat, aiMessage }) => {
+            setMessages((prev) => [...prev, aiMessage]);
+            setStreamingDraft(null);
+            if (updatedChat) setChat(updatedChat);
+          },
+          onError: (err) => {
+            setStreamingDraft(null);
+            showError(err, "AI failed to respond");
+          },
+        },
+      );
+    } catch (err) {
+      setStreamingDraft(null);
+      showError(err, "Could not send message");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function handleConfirm(accepted) {
+    if (!chat || confirming) return;
+    setConfirming(true);
+    try {
+      const result = await confirmSummary(chat.id, accepted);
+      setChat(result.chat);
+      if (accepted && result.ticket) {
+        showSuccess("Ticket created");
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `local-${Date.now()}`,
+            chatId: chat.id,
+            sender: "ai",
+            content:
+              "Thank you for confirming. Your ticket is now in progress. You can follow the status on your dashboard.",
+            aiAnswerType: "normal",
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+      } else if (!accepted) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `local-${Date.now()}`,
+            chatId: chat.id,
+            sender: "ai",
+            content:
+              "No problem. Tell me what we should change and I’ll update the summary.",
+            aiAnswerType: "normal",
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+      }
+    } catch (err) {
+      showError(err, "Could not record your choice");
+    } finally {
+      setConfirming(false);
+    }
   }
 
   function handleNewChat() {
-    setMessages([...createTicketChatSeed]);
-    setConfirmationDone(false);
+    if (chat && (chat.status === "active" || chat.status === "waiting_confirmation")) {
+      markChatAsDraft(chat.id);
+    }
+    setChat(null);
+    setMessages([]);
+    setStreamingDraft(null);
     setMessageInput("");
-    setAttachedFile(null);
+    if (resumeId) setSearchParams({}, { replace: true });
   }
 
   function handleShare() {
@@ -61,106 +362,153 @@ export default function ClientCreateTicket() {
       navigator.share({ title: "Create Ticket", url }).catch(() => {});
     } else if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(url);
+      showSuccess("Link copied");
     }
   }
 
-  function handleConfirm(choice) {
-    if (confirmationDone) return;
-    const t = formatNowTime();
-    const tail =
-      choice === "yes"
-        ? [
-            {
-              kind: "message",
-              id: `confirm-u-${Date.now()}`,
-              role: "user",
-              author: "You",
-              time: t,
-              text: "Yes",
-              short: true,
-            },
-            {
-              kind: "message",
-              id: `confirm-s-${Date.now()}`,
-              role: "assistant",
-              author: "Ruag Team",
-              time: t,
-              text: "Thank you for confirming. Your ticket is now in progress. You can follow the status on your dashboard.",
-            },
-          ]
-        : [
-            {
-              kind: "message",
-              id: `confirm-u-${Date.now()}`,
-              role: "user",
-              author: "You",
-              time: t,
-              text: "No",
-              short: true,
-            },
-            {
-              kind: "message",
-              id: `confirm-s-${Date.now()}`,
-              role: "assistant",
-              author: "Ruag Team",
-              time: t,
-              text: "No problem. Please reply with what we should change in the summary, and we’ll update the ticket before moving forward.",
-            },
-          ];
-    setMessages((prev) => [...prev, ...tail]);
-    setConfirmationDone(true);
-  }
+  function renderMessage(msg) {
+    const isUser = msg.sender === "user";
+    const time = formatTime(msg.createdAt);
+    const showConfirm =
+      !isUser &&
+      msg.aiAnswerType === "summary" &&
+      msg.id === latestSummaryId &&
+      awaitingConfirmation;
 
-  function handleSubmit(event) {
-    event.preventDefault();
-    const trimmedInput = messageInput.trim();
-    if (!trimmedInput && !attachedFile) return;
-
-    const t = formatNowTime();
-    const userLine = {
-      kind: "message",
-      id: `u-${Date.now()}`,
-      role: "user",
-      author: "You",
-      time: t,
-      text: trimmedInput || `Attached: ${attachedFile?.name}`,
-      file: attachedFile ? attachedFile.name : undefined,
-    };
-    const assistantLine = {
-      kind: "message",
-      id: `a-${Date.now()}`,
-      role: "assistant",
-      author: "Ruag Team",
-      time: t,
-      text: "Thanks, we’ve logged your message. A specialist will follow up here shortly.",
-    };
-    setMessages((prev) => [...prev, userLine, assistantLine]);
-    setMessageInput("");
-    setAttachedFile(null);
-  }
-
-  function Avatar({ src, label }) {
     return (
-      <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-[#d8dce4] bg-white">
-        {src ? (
-          <img src={src} alt={label} className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-[#6b7280]">
-            {label?.[0] ?? "?"}
+      <article
+        key={msg.id}
+        className={
+          isUser
+            ? "ml-auto w-full max-w-[min(100%,560px)]"
+            : "w-full max-w-[min(100%,560px)]"
+        }
+      >
+        <p
+          className={`mb-2 text-[14px] font-semibold leading-none text-[#101827] ${
+            isUser ? "text-right pr-11" : "pl-12"
+          }`}
+        >
+          {isUser ? "You" : "Ruag Team"}
+          {time ? `, ${time}` : ""}
+        </p>
+        <div
+          className={`flex items-end gap-2 ${isUser ? "justify-end" : "justify-start"}`}
+        >
+          {!isUser ? <Avatar src={teamAvatar} label="Ruag Team" /> : null}
+          <div
+            className={`max-w-[560px] ${isUser ? bubbleUser : bubbleTeam} whitespace-pre-wrap`}
+          >
+            {showConfirm ? (
+              <>
+                <p className="text-[13px] text-slate-700">
+                  Here’s how I understand your request. Please confirm before I
+                  open the ticket.
+                </p>
+                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    Summary
+                  </p>
+                  <p className="mt-1.5 text-[13px] leading-relaxed text-slate-800">
+                    {msg.content}
+                  </p>
+                </div>
+                <p className="mt-3 text-[13px] text-slate-700">
+                  Do you confirm this is correct?
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className={`${btnNo} ${confirming ? "pointer-events-none opacity-45" : ""}`}
+                    onClick={() => handleConfirm(false)}
+                    disabled={confirming}
+                  >
+                    No
+                  </button>
+                  <button
+                    type="button"
+                    className={`${btnYes} ${confirming ? "pointer-events-none opacity-45" : ""}`}
+                    onClick={() => handleConfirm(true)}
+                    disabled={confirming}
+                  >
+                    Yes
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p>{msg.content}</p>
+                {msg.attachments?.length ? (
+                  <div className="mt-2 flex flex-col gap-1.5">
+                    {msg.attachments.map((att) => (
+                      <AttachmentChip key={att.id} attachment={att} />
+                    ))}
+                  </div>
+                ) : null}
+              </>
+            )}
           </div>
-        )}
-      </div>
+          {isUser ? <Avatar src={userAvatar} label="You" /> : null}
+        </div>
+      </article>
     );
   }
+
+  function renderStreaming() {
+    if (!streamingDraft) return null;
+    return (
+      <article className="w-full max-w-[min(100%,560px)]">
+        <p className="mb-2 pl-12 text-[14px] font-semibold leading-none text-[#101827]">
+          Ruag Team
+        </p>
+        <div className="flex items-end gap-2 justify-start">
+          <Avatar src={teamAvatar} label="Ruag Team" />
+          <div className={`max-w-[560px] ${bubbleTeam} whitespace-pre-wrap`}>
+            {streamingDraft.content || (
+              <span className="inline-flex gap-1 text-slate-400">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:120ms]" />
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:240ms]" />
+              </span>
+            )}
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  const placeholderText = chat
+    ? chatClosed
+      ? "This chat is closed. Click ‘New Chat’ to start another."
+      : awaitingConfirmation
+        ? "Please answer Yes or No above to continue."
+        : "Write your message..."
+    : "Describe your issue to start a new chat...";
+
+  const inputDisabled = sending || chatClosed || awaitingConfirmation;
 
   return (
     <PortalLayout mode="client">
       <section className="mx-auto flex h-[calc(100dvh-6rem)] max-h-[calc(100dvh-6rem)] min-h-0 w-full max-w-[920px] flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/90 bg-white px-4 py-3 sm:px-5">
-          <h1 className="text-[18px] font-semibold leading-tight text-[#0f172a] sm:text-[20px]">
-            Create Ticket
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-[18px] font-semibold leading-tight text-[#0f172a] sm:text-[20px]">
+              Create Ticket
+            </h1>
+            {chat ? (
+              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-600">
+                {chat.status.replace("_", " ")}
+              </span>
+            ) : null}
+          </div>
           <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => navigate("/client/drafts")}
+              className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-white px-4 py-2 text-[13px] font-medium text-[#111827] shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition hover:bg-slate-50"
+            >
+              Drafts
+            </button>
             <button
               type="button"
               onClick={handleShare}
@@ -184,114 +532,20 @@ export default function ClientCreateTicket() {
           className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#F5F7FA] to-white p-4 ${scrollPretty}`}
         >
           <div className="mx-auto max-w-[920px] space-y-5">
-            {messages.map((item) => {
-              if (item.kind === "date") {
-                return (
-                  <div key={item.id} className="flex justify-center py-1">
-                    <span className="rounded-full bg-[#E8F4FD] px-4 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-sky-100">
-                      {item.label}
-                    </span>
-                  </div>
-                );
-              }
-
-              if (item.kind === "confirmation") {
-                return (
-                  <div key={item.id} className="w-full">
-                    <p className="mb-2 pl-12 text-[14px] font-semibold leading-none text-[#101827]">
-                      {item.author}, {item.time}
-                    </p>
-                    <div className="flex items-end gap-2">
-                      <Avatar src={teamAvatar} label="Ruag Team" />
-                      <div className={`max-w-[min(100%,520px)] ${bubbleTeam}`}>
-                        {item.intro ? <p>{item.intro}</p> : null}
-                        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                            Summary
-                          </p>
-                          <p className="mt-1.5 text-[13px] leading-relaxed text-slate-800">
-                            {item.summary}
-                          </p>
-                        </div>
-                        <p className="mt-3 text-[13px] text-slate-700">
-                          Do you confirm this is correct?
-                        </p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            className={`${btnNo} ${confirmationDone ? "pointer-events-none opacity-45" : ""}`}
-                            onClick={() => handleConfirm("no")}
-                            disabled={confirmationDone}
-                          >
-                            No
-                          </button>
-                          <button
-                            type="button"
-                            className={`${btnYes} ${confirmationDone ? "pointer-events-none opacity-45" : ""}`}
-                            onClick={() => handleConfirm("yes")}
-                            disabled={confirmationDone}
-                          >
-                            Yes
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-
-              if (item.kind === "message") {
-                const isUser = item.role === "user";
-                const short = item.short;
-
-                return (
-                  <article
-                    key={item.id}
-                    className={
-                      isUser
-                        ? "ml-auto w-full max-w-[min(100%,560px)]"
-                        : "w-full max-w-[min(100%,560px)]"
-                    }
-                  >
-                    <p
-                      className={`mb-2 text-[14px] font-semibold leading-none text-[#101827] ${
-                        isUser ? "text-right pr-11" : "pl-12"
-                      }`}
-                    >
-                      {item.author}, {item.time}
-                    </p>
-                    <div
-                      className={`flex items-end gap-2 ${isUser ? "justify-end" : "justify-start"}`}
-                    >
-                      {!isUser ? (
-                        <Avatar src={teamAvatar} label="Ruag Team" />
-                      ) : null}
-                      <div
-                        className={`max-w-[560px] ${isUser ? bubbleUser : bubbleTeam} ${short ? "!rounded-full px-5 py-2" : ""}`}
-                      >
-                        {item.text ? <p>{item.text}</p> : null}
-                        {item.file ? (
-                          <a
-                            href="#attachment"
-                            className={`mt-2 inline-flex items-center gap-1.5 ${linkAttach}`}
-                            onClick={(e) => e.preventDefault()}
-                          >
-                            <FiPaperclip
-                              className="h-3.5 w-3.5 shrink-0"
-                              aria-hidden
-                            />
-                            {item.file}
-                          </a>
-                        ) : null}
-                      </div>
-                      {isUser ? <Avatar src={userAvatar} label="You" /> : null}
-                    </div>
-                  </article>
-                );
-              }
-
-              return null;
-            })}
+            {messages.length === 0 && !streamingDraft ? (
+              <div className="mt-12 text-center text-slate-500">
+                <p className="text-[14px]">
+                  Start by describing the problem you’re facing. The assistant
+                  will help you draft a ticket.
+                </p>
+                <p className="mt-2 text-[12px] text-slate-400">
+                  Tip: ask for a “summary” when you’re ready to open the
+                  ticket.
+                </p>
+              </div>
+            ) : null}
+            {messages.map(renderMessage)}
+            {renderStreaming()}
           </div>
         </div>
 
@@ -299,33 +553,40 @@ export default function ClientCreateTicket() {
           onSubmit={handleSubmit}
           className="shrink-0 border-t border-slate-200/90 bg-white px-4 pb-4 pt-3 sm:px-6"
         >
-          {attachedFile ? (
+          <input
+            ref={fileInputRef}
+            type="file"
+            onChange={handleFileChange}
+            accept="image/*,application/pdf,text/*"
+            className="hidden"
+          />
+          {pendingFile ? (
             <div className="mx-auto mb-2 flex max-w-[720px] items-center justify-end">
-              <span className="inline-flex max-w-full items-center truncate rounded-full bg-[#E7F3FF] px-3 py-1 text-[12px] font-medium text-[#1e293b] ring-1 ring-sky-200/40">
-                {attachedFile.name}
+              <span className="inline-flex max-w-full items-center gap-2 truncate rounded-full bg-[#E7F3FF] px-3 py-1 text-[12px] font-medium text-[#1e293b] ring-1 ring-sky-200/40">
+                <FiPaperclip className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span className="truncate">{pendingFile.name}</span>
+                <span className="shrink-0 text-slate-500">
+                  {formatBytes(pendingFile.size)}
+                </span>
                 <button
                   type="button"
-                  onClick={() => setAttachedFile(null)}
-                  className="ml-2 text-slate-500 hover:text-slate-800"
+                  onClick={() => setPendingFile(null)}
+                  className="text-slate-500 hover:text-slate-800"
                   aria-label="Remove attachment"
                 >
-                  ×
+                  <FiX className="h-3.5 w-3.5" />
                 </button>
               </span>
             </div>
           ) : null}
           <div className="mx-auto flex max-w-[720px] items-center gap-1 rounded-2xl border border-[#e7e9ef] bg-white px-3 py-2 shadow-[0_1px_1px_rgba(16,24,40,0.04)]">
-            <input
-              ref={fileInputRef}
-              type="file"
-              onChange={handleFileChange}
-              className="hidden"
-            />
             <button
               type="button"
               onClick={handleOpenFilePicker}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-50"
+              disabled={inputDisabled}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Add attachment"
+              title="Attach an image, PDF or text file"
             >
               <FiPlus className="h-5 w-5" strokeWidth={2} />
             </button>
@@ -337,27 +598,35 @@ export default function ClientCreateTicket() {
               type="text"
               value={messageInput}
               onChange={(e) => setMessageInput(e.target.value)}
-              placeholder="Write your message..."
-              className="min-h-[44px] min-w-0 flex-1 border-0 bg-transparent text-[15px] text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:ring-0"
+              placeholder={
+                uploading ? "Uploading attachment..." : placeholderText
+              }
+              disabled={inputDisabled}
+              className="min-h-[44px] min-w-0 flex-1 border-0 bg-transparent text-[15px] text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:ring-0 disabled:cursor-not-allowed"
             />
             <button
               type="button"
               className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#c2c8d3] transition hover:text-slate-600"
               aria-label="Emoji"
+              disabled
             >
               <FiSmile className="text-[17px]" />
             </button>
             <button
               type="button"
               onClick={handleOpenFilePicker}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#c2c8d3] transition hover:text-slate-600"
+              disabled={inputDisabled}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#c2c8d3] transition hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Attach file"
             >
               <FiPaperclip className="text-[17px]" />
             </button>
             <button
               type="submit"
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#020c3d] text-white shadow-sm transition hover:bg-[#0a1a5c]"
+              disabled={
+                inputDisabled || (!messageInput.trim() && !pendingFile)
+              }
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#020c3d] text-white shadow-sm transition hover:bg-[#0a1a5c] disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Send message"
             >
               <FiSend className="text-[18px]" />
