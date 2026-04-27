@@ -56,6 +56,7 @@ Edit `backend/.env`:
 - `JWT_SECRET` — set this to a long random string. Used to sign login/signup access tokens.
 - `JWT_EXPIRES_MINUTES` — access-token lifetime (default `60`).
 - `WATSONX_*` — IBM WatsonX credentials. Leave `MOCK_MODE=true` to run without a real WatsonX connection.
+- `JIRA_*` — Jira Cloud credentials and project settings for syncing `backend/data/jira_ticket_dataset.json` into Jira.
 
 ## Database (PostgreSQL via Docker)
 
@@ -138,3 +139,46 @@ docker exec -it sfms-postgres psql -U sfms -d sfms \
 ## MOCK_MODE
 
 When `MOCK_MODE=true` (the default), all WatsonX calls return a hardcoded mock response. No API key required. Set `MOCK_MODE=false` and provide real credentials to use IBM WatsonX.
+
+## Jira ticket dataset sync
+
+The backend can create Jira issues from `backend/data/jira_ticket_dataset.json` and write Jira updates back into that file.
+
+Configure these values in `backend/.env`:
+
+```bash
+JIRA_BASE_URL=https://your-domain.atlassian.net
+JIRA_EMAIL=your-email@example.com
+JIRA_API_TOKEN=your-api-token
+JIRA_PROJECT_KEY=ABC
+JIRA_DEFAULT_ISSUE_TYPE=Task
+JIRA_WEBHOOK_SECRET=choose-a-shared-secret
+JIRA_FIELD_SOURCE_CASE_ID=customfield_10000
+JIRA_FIELD_FEEDBACK_ISSUE_TYPE_ID=customfield_10001
+JIRA_FIELD_TEAM_ID=customfield_10002
+JIRA_FIELD_RECOMMENDED_ACTION_ID=customfield_10003
+```
+
+Start the backend, then call:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/jira/sync-to-jira
+curl -X POST http://127.0.0.1:8000/api/jira/sync-from-jira
+```
+
+`sync-to-jira` creates Jira issues for dataset rows that do not yet have `jira_key` or `jira_id`, then stores the Jira identifiers in the JSON file. `sync-from-jira` refreshes linked rows from Jira.
+
+To map dataset metadata into Jira fields, create custom text fields in Jira for source case, feedback issue type, team, and recommended action. Then find their `customfield_...` IDs with:
+
+```bash
+curl http://127.0.0.1:8000/api/jira/fields
+```
+
+Put the matching IDs in `backend/.env`. If these values are blank, the sync only uses Jira's standard fields.
+
+For automatic updates, configure a Jira webhook that points to:
+
+```text
+POST http://your-public-backend-url/api/jira/webhook
+Secret: choose-a-shared-secret
+```
