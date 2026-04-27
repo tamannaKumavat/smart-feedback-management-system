@@ -60,7 +60,7 @@ Edit `backend/.env`:
 
 ## Database (PostgreSQL via Docker)
 
-Postgres runs as a Docker container defined in `docker-compose.yml`. Default credentials (development only): user `sfms`, password `sfms`, database `sfms`, host port `5433`.
+Postgres runs as a Docker container defined in `docker-compose.yml`. Default credentials (development only): user `sfms`, password `sfms`, database `issues`, host port `5433`.
 
 **Start the database**
 
@@ -71,7 +71,7 @@ docker compose up -d
 Verify it is healthy:
 
 ```bash
-docker exec sfms-postgres pg_isready -U sfms -d sfms
+docker exec sfms-postgres pg_isready -U sfms -d issues
 ```
 
 **Create the schema (one-time, idempotent)**
@@ -88,7 +88,7 @@ This creates the `users` table. It does **not** insert any seed users — the ta
 Open a `psql` shell inside the container:
 
 ```bash
-docker exec -it sfms-postgres psql -U sfms -d sfms
+docker exec -it sfms-postgres psql -U sfms -d issues
 ```
 
 Common commands:
@@ -99,7 +99,7 @@ Common commands:
 SELECT id, full_name, email, role FROM users;
 ```
 
-You can also connect any GUI client (TablePlus, DBeaver, pgAdmin) with `localhost:5433`, user `sfms`, password `sfms`, database `sfms`.
+You can also connect any GUI client (TablePlus, DBeaver, pgAdmin) with `localhost:5433`, user `sfms`, password `sfms`, database `issues`.
 
 **Stop / reset**
 
@@ -132,7 +132,7 @@ cd frontend && npm run dev
 Open [http://localhost:5173](http://localhost:5173).
 
 ```bash
-docker exec -it sfms-postgres psql -U sfms -d sfms \
+docker exec -it sfms-postgres psql -U sfms -d issues \
   -c "UPDATE users SET role='admin' WHERE email='your-email@example.com';"
 ```
 
