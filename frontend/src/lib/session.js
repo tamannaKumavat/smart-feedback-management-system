@@ -15,8 +15,13 @@ export function getSession() {
   }
 }
 
-export function saveSession(user) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify({ user }))
+export function getToken() {
+  const session = getSession()
+  return session?.token || null
+}
+
+export function saveSession(user, token) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ user, token }))
   notifySessionChanged()
 }
 
