@@ -4,12 +4,30 @@ from langgraph.graph.message import add_messages
 
 from pydantic import BaseModel, Field
 
-from backend.workflows.smart_feedback.constants import (
+from workflows.smart_feedback.constants import (
     AnalysisAgentIntent,
     AnalysisAgentSentiment,
     AnalysisAgentUrgency,
     AnalysisAgentIssueType,
 )
+
+class EngagementDecision(BaseModel):
+    """Structured output for the engagement agent's first-phase decision."""
+
+    needs_clarification: bool = Field(
+        description=(
+            "True if the user query is vague or missing key details and a "
+            "clarifying question must be asked before proceeding."
+        ),
+        default=False,
+    )
+    response: str = Field(
+        description=(
+            "A warm acknowledgment when needs_clarification is False, "
+            "or a single specific clarifying question when it is True."
+        ),
+    )
+
 
 class AnalysisAgentResult(BaseModel):
     """Is the pydantic model which handles the result of the analysis agent"""
@@ -35,9 +53,13 @@ class AnalysisAgentResult(BaseModel):
 
 class SmartFeedbackState(TypedDict):
     user_query: str
-    chat_history: Annotated[list, add_messages]  # For keeping track of the messages
-    human_assessment: str = ""
-    ticket_id: str = ""
-    analysis_agent_result: AnalysisAgentResult
-    rag_workflow_state: dict = {}
-    triage_workflow_state: dict = {}
+    chat_history: Annotated[list, add_messages]
+    is_first_message: bool         # True only on the user's very first message in a session
+    needs_clarification: bool      # set by engagement Phase 1; routes to END when True
+    human_assessment: str
+    ticket_id: str
+    analysis_agent_result: AnalysisAgentResult   # None until analysis_agent runs
+    rag_results: list              # list of dicts: {text, score, source, metadata}
+    rag_workflow_state: dict
+    triage_workflow_state: dict
+    engagement_response: str       # last message sent back to the user

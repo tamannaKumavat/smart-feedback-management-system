@@ -119,6 +119,10 @@ export default function ClientCreateTicket() {
   const [messages, setMessages] = useState([]);
   const [streamingDraft, setStreamingDraft] = useState(null);
   const [messageInput, setMessageInput] = useState("");
+  const [attachedFile, setAttachedFile] = useState(null);
+  const [confirmationDone, setConfirmationDone] = useState(false);
+  const [isFirstMessage, setIsFirstMessage] = useState(true);
+  const fileInputRef = useRef(null);
   const [sending, setSending] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [pendingFile, setPendingFile] = useState(null);
@@ -353,6 +357,8 @@ export default function ClientCreateTicket() {
     setMessages([]);
     setStreamingDraft(null);
     setMessageInput("");
+    setAttachedFile(null);
+    setIsFirstMessage(true);
     if (resumeId) setSearchParams({}, { replace: true });
   }
 
@@ -375,6 +381,59 @@ export default function ClientCreateTicket() {
       msg.id === latestSummaryId &&
       awaitingConfirmation;
 
+  async function handleSubmit(event) {
+    event.preventDefault();
+    const trimmedInput = messageInput.trim();
+    if (!trimmedInput && !attachedFile) return;
+
+    const t = formatNowTime();
+    const userText = trimmedInput || `Attached: ${attachedFile?.name}`;
+    const userLine = {
+      kind: "message",
+      id: `u-${Date.now()}`,
+      role: "user",
+      author: "You",
+      time: t,
+      text: userText,
+      file: attachedFile ? attachedFile.name : undefined,
+    };
+    const loadingId = `a-${Date.now()}`;
+    const loadingLine = {
+      kind: "message",
+      id: loadingId,
+      role: "assistant",
+      author: "Ruag Team",
+      time: t,
+      text: "…",
+    };
+
+    setMessages((prev) => [...prev, userLine, loadingLine]);
+    setMessageInput("");
+    setAttachedFile(null);
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_query: userText, is_first_message: isFirstMessage }),
+      });
+      setIsFirstMessage(false);
+      const data = await res.json().catch(() => ({}));
+      const reply = res.ok
+        ? (data.response || "Thank you for your message. We’ll follow up shortly.")
+        : (data.detail || "Something went wrong. Please try again.");
+      setMessages((prev) =>
+        prev.map((m) => (m.id === loadingId ? { ...m, text: reply } : m))
+      );
+    } catch {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === loadingId
+            ? { ...m, text: "Could not reach the server. Please try again." }
+            : m
+        )
+      );
+    }
     return (
       <article
         key={msg.id}

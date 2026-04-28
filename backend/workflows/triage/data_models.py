@@ -1,10 +1,9 @@
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
-from typing import Annotated
+from typing import Annotated, Literal
 from langgraph.graph.message import add_messages
-from backend.workflows.triage.constants import (
+from workflows.triage.constants import (
     RAGEvaluationDecision,
-    SUPPORT_LEVEL_SEVERITY,
     TriageJudgeDecision,
 )
 
@@ -35,9 +34,9 @@ class IncidentAssessment(BaseModel):
     reason (str): Is the rational behind the decision of the LLM.
     """
 
-    severity: SUPPORT_LEVEL_SEVERITY = Field(
+    severity: Literal[1, 2, 3] = Field(
         description="Is the severity level of the user request. By default its the lowest severity",
-        default=SUPPORT_LEVEL_SEVERITY.__args__[0],
+        default=1,
     )
     reason: str = Field(
         description="Provides the reason for the given decision", default=""
