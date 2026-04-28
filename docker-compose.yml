@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sfms-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sfms
+      POSTGRES_PASSWORD: sfms
+      POSTGRES_DB: issues
+    ports:
+      - "5433:5432"
+    volumes:
+      - sfms_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sfms -d issues"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  sfms_pgdata:

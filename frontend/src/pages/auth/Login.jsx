@@ -34,7 +34,7 @@ export default function Login() {
       if (!response?.user?.role) {
         throw new Error('Login response is invalid (missing user role).')
       }
-      saveSession(response.user)
+      saveSession(response.user, response.accessToken)
       showSuccess(response.message || 'Signed in successfully.')
       const role = String(response.user.role).toLowerCase()
       navigate(role === 'admin' ? '/admin/dashboard' : '/client/dashboard', { replace: true })

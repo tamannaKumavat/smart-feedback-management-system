@@ -1,6 +1,12 @@
 # RUAG Smart Feedback Management System
 
-A minimal feedback management system with a FastAPI backend and React frontend, powered by IBM WatsonX AI.
+A minimal feedback management system with a FastAPI backend, React frontend and a PostgreSQL database, powered by IBM WatsonX AI.
+
+## Prerequisites
+
+- Python 3.11+
+- Node.js 18+
+- Docker Desktop (for the PostgreSQL container)
 
 ## Install
 
@@ -29,6 +35,7 @@ pip install -r requirements.txt
 > The `.venv/` folder is git-ignored. Re-activate it each time you open a new terminal before running the backend.
 
 **Frontend**
+
 ```bash
 cd frontend
 npm install
@@ -36,20 +43,84 @@ npm install
 
 ## Configure
 
+Backend environment file:
+
 ```bash
+cd backend
 cp .env.example .env
 ```
 
-Edit `.env` with your WatsonX credentials. Leave `MOCK_MODE=true` to run without a real WatsonX connection.
+Edit `backend/.env`:
+
+- `DATABASE_URL` — PostgreSQL connection string (default points at the Docker container on `localhost:5433`).
+- `JWT_SECRET` — set this to a long random string. Used to sign login/signup access tokens.
+- `JWT_EXPIRES_MINUTES` — access-token lifetime (default `60`).
+- `WATSONX_*` — IBM WatsonX credentials. Leave `MOCK_MODE=true` to run without a real WatsonX connection.
+- `JIRA_*` — Jira Cloud credentials and project settings for syncing `backend/data/jira_ticket_dataset.json` into Jira.
+
+## Database (PostgreSQL via Docker)
+
+Postgres runs as a Docker container defined in `docker-compose.yml`. Default credentials (development only): user `sfms`, password `sfms`, database `issues`, host port `5433`.
+
+**Start the database**
+
+```bash
+docker compose up -d
+```
+
+Verify it is healthy:
+
+```bash
+docker exec sfms-postgres pg_isready -U sfms -d issues
+```
+
+**Create the schema (one-time, idempotent)**
+
+```bash
+cd backend
+.venv/bin/python init_db.py
+```
+
+This creates the `users` table. It does **not** insert any seed users — the table starts empty. Re-running is safe; existing data is left untouched.
+
+**Inspect the data**
+
+Open a `psql` shell inside the container:
+
+```bash
+docker exec -it sfms-postgres psql -U sfms -d issues
+```
+
+Common commands:
+
+```sql
+\dt                                  -- list tables
+\d users                             -- describe users table
+SELECT id, full_name, email, role FROM users;
+```
+
+You can also connect any GUI client (TablePlus, DBeaver, pgAdmin) with `localhost:5433`, user `sfms`, password `sfms`, database `issues`.
+
+**Stop / reset**
+
+```bash
+docker compose stop          # stop, keep data
+docker compose down          # remove container, keep data
+docker compose down -v       # ALSO wipe the volume (then re-run init_db.py)
+```
 
 ## Run
 
+Make sure the database container is up first (`docker compose up -d`).
+
 **Option 1 — single script**
+
 ```bash
 bash scripts/run_dev.sh
 ```
 
 **Option 2 — manually**
+
 ```bash
 # Terminal 1
 cd backend && uvicorn main:app --reload --port 8000
@@ -60,6 +131,54 @@ cd frontend && npm run dev
 
 Open [http://localhost:5173](http://localhost:5173).
 
+```bash
+docker exec -it sfms-postgres psql -U sfms -d issues \
+  -c "UPDATE users SET role='admin' WHERE email='your-email@example.com';"
+```
+
 ## MOCK_MODE
 
 When `MOCK_MODE=true` (the default), all WatsonX calls return a hardcoded mock response. No API key required. Set `MOCK_MODE=false` and provide real credentials to use IBM WatsonX.
+
+## Jira ticket dataset sync
+
+The backend can create Jira issues from `backend/data/jira_ticket_dataset.json` and write Jira updates back into that file.
+
+Configure these values in `backend/.env`:
+
+```bash
+JIRA_BASE_URL=https://your-domain.atlassian.net
+JIRA_EMAIL=your-email@example.com
+JIRA_API_TOKEN=your-api-token
+JIRA_PROJECT_KEY=ABC
+JIRA_DEFAULT_ISSUE_TYPE=Task
+JIRA_WEBHOOK_SECRET=choose-a-shared-secret
+JIRA_FIELD_SOURCE_CASE_ID=customfield_10000
+JIRA_FIELD_FEEDBACK_ISSUE_TYPE_ID=customfield_10001
+JIRA_FIELD_TEAM_ID=customfield_10002
+JIRA_FIELD_RECOMMENDED_ACTION_ID=customfield_10003
+```
+
+Start the backend, then call:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/jira/sync-to-jira
+curl -X POST http://127.0.0.1:8000/api/jira/sync-from-jira
+```
+
+`sync-to-jira` creates Jira issues for dataset rows that do not yet have `jira_key` or `jira_id`, then stores the Jira identifiers in the JSON file. `sync-from-jira` refreshes linked rows from Jira.
+
+To map dataset metadata into Jira fields, create custom text fields in Jira for source case, feedback issue type, team, and recommended action. Then find their `customfield_...` IDs with:
+
+```bash
+curl http://127.0.0.1:8000/api/jira/fields
+```
+
+Put the matching IDs in `backend/.env`. If these values are blank, the sync only uses Jira's standard fields.
+
+For automatic updates, configure a Jira webhook that points to:
+
+```text
+POST http://your-public-backend-url/api/jira/webhook
+Secret: choose-a-shared-secret
+```
