@@ -23,10 +23,11 @@ from workflows.triage.constants import (
 
 
 class TriageWorkflow:
-    def __init__(self, chat_model: Any, judge_max_iterations: int = 2):
+    def __init__(self, chat_model: Any, judge_max_iterations: int = 2, checkpointer = None):
         self.chat_model = chat_model
         self.judge_max_iterations: int = judge_max_iterations
         self._judge_current_iteration: int = 0
+        self.checkpointer = checkpointer
 
         self._workflow: StateGraph = None
         self._generate_workflow()
@@ -91,7 +92,7 @@ class TriageWorkflow:
         workflow.add_edge("update_ticket", "generate_ticket_created_response")
         workflow.add_edge("generate_ticket_created_response", END)
 
-        self._workflow = workflow.compile()
+        self._workflow = workflow.compile(checkpointer=self.checkpointer)
 
     def evaluate_rag_response(self, state: TriageState) -> TriageState:
         rag_evaluation_chain = (

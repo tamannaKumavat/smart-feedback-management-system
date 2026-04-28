@@ -15,6 +15,8 @@ from workflows.smart_feedback.prompt_templates import (
     chat_template_engagement_rag,
 )
 from workflows.smart_feedback.rag_agent import RAGAgent, RELEVANCE_THRESHOLD
+from langgraph.types import interrupt
+
 
 
 class SmartFeedbackWorkflow:
@@ -35,10 +37,11 @@ class SmartFeedbackWorkflow:
         chat_model (Any): A LangChain chat-model integration (e.g. ChatWatsonx).
     """
 
-    def __init__(self, chat_model: Any):
+    def __init__(self, chat_model: Any, checkpointer: Any = None):
         self.chat_model = chat_model
         self._rag_agent = RAGAgent()
         self._workflow: StateGraph = None
+        self.checkpointer = checkpointer
         self._generate_workflow()
 
     @property
@@ -80,7 +83,7 @@ class SmartFeedbackWorkflow:
 
         workflow.add_edge("triage_workflow", END)
 
-        self._workflow = workflow.compile()
+        self._workflow = workflow.compile(checkpointer=self.checkpointer)
 
     # Routing
     def _route_engagement(self, state: SmartFeedbackState) -> str:
@@ -139,6 +142,8 @@ class SmartFeedbackWorkflow:
             if state.get("is_first_message", True)
             else chat_template_engagement_followup
         )
+        answer = interrupt("How can I help you with today?")
+        state["user_query"] = answer
         chain = template | self.chat_model.with_structured_output(EngagementDecision)
         decision: EngagementDecision = chain.invoke({"user_query": state["user_query"]})
 
@@ -183,7 +188,7 @@ class SmartFeedbackWorkflow:
         return {}
 
     def triage_workflow(self, state: SmartFeedbackState) -> dict:
-        triage = TriageWorkflow(self.chat_model)
+        triage = TriageWorkflow(self.chat_model, self.checkpointer)
         final_state = triage.run(
             user_query=state["user_query"],
             rag_results=state.get("rag_results", []),
@@ -191,7 +196,7 @@ class SmartFeedbackWorkflow:
         return {"triage_workflow_state": final_state}
 
     # Public entry point
-    def run(self, user_query: str, is_first_message: bool = True, stream: bool = False):
+    def run(self, user_query: str, is_first_message: bool = True, stream: bool = False, **kwargs):
         initial_state: SmartFeedbackState = {
             "user_query": user_query,
             "chat_history": [],
@@ -207,8 +212,8 @@ class SmartFeedbackWorkflow:
         }
 
         if stream:
-            for chunk in self._workflow.stream(initial_state):
+            for chunk in self._workflow.stream(initial_state, **kwargs):
                 print(chunk)
             return None
 
-        return self._workflow.invoke(initial_state)
+        return self._workflow.invoke(initial_state, **kwargs)
