@@ -9,6 +9,7 @@ from routes.feedback import router as feedback_router
 from routes.jira import router as jira_router
 from routes.tickets import router as tickets_router
 from routes.uploads import router as uploads_router
+from routes.chat_websocket import router as chat_websocket_router
 
 logging.basicConfig(level=logging.INFO)
 
@@ -29,6 +30,7 @@ app.include_router(uploads_router)
 app.include_router(tickets_router)
 app.include_router(feedback_router)
 app.include_router(jira_router)
+app.include_router(chat_websocket_router)
 
 
 @app.get("/health")
