@@ -66,7 +66,7 @@ class SmartFeedbackWorkflow:
             "engagement_with_user",
             self._route_engagement,
             {
-                "clarify": END,          # Phase 1: vague query — question returned to user
+                "clarify": "engagement_with_user",          # Phase 1: vague query — question returned to user
                 "proceed": "create_ticket",  # Phase 1: clear query — proceed through pipeline
                 "respond": END,          # Phase 2: RAG sufficient — answer returned to user
                 "triage": "triage_workflow", # Phase 2: RAG insufficient — escalate
@@ -188,7 +188,7 @@ class SmartFeedbackWorkflow:
         return {}
 
     def triage_workflow(self, state: SmartFeedbackState) -> dict:
-        triage = TriageWorkflow(self.chat_model, self.checkpointer)
+        triage = TriageWorkflow(self.chat_model, checkpointer=self.checkpointer)
         final_state = triage.run(
             user_query=state["user_query"],
             rag_results=state.get("rag_results", []),
