@@ -1,6 +1,7 @@
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
 from typing import Any
+from langgraph.types import interrupt
 
 from workflows.triage.data_models import (
     TriageState,
@@ -14,6 +15,7 @@ from workflows.triage.prompt_templates import (
     chat_template_clarification_response,
     chat_template_triage_judge,
     chat_template_triage_support_level,
+    chat_template_ticket_creation
 )
 from workflows.triage.constants import (
     TriageJudgeDecision,
@@ -23,7 +25,9 @@ from workflows.triage.constants import (
 
 
 class TriageWorkflow:
-    def __init__(self, chat_model: Any, judge_max_iterations: int = 2, checkpointer = None):
+    def __init__(
+        self, chat_model: Any, judge_max_iterations: int = 2, checkpointer=None
+    ):
         self.chat_model = chat_model
         self.judge_max_iterations: int = judge_max_iterations
         self._judge_current_iteration: int = 0
@@ -63,7 +67,7 @@ class TriageWorkflow:
             self.route_evaluate_rag,
             {
                 RAGEvaluationDecision.OK: "rag_response_ok",
-                RAGEvaluationDecision.CLARIFICATION: "rag_response_clarification",
+                RAGEvaluationDecision.CLARIFICATION: "triage_request",
                 RAGEvaluationDecision.NOT_SOLVABLE: "triage_request",
             },
         )
@@ -111,13 +115,17 @@ class TriageWorkflow:
         }
 
     def human_ticket_assessment(self, state: TriageState) -> TriageState:
-        # Simulate human assessment (e.g., check if ticket needs more info)
-        # In a real app, this could be a human-in-the-loop API call or manual review
-        # user_input: str = input()
-        assessment = HumanAssessment.OK  # or HUMAN_ASSESSMENT_ADD_ADDITIONAL_CONTENT
-        return {"human_assessment": assessment}
+
+        while True:
+            assessment = interrupt(
+                f"Please review the ticket answer one of the following options: {', '.join([i.value for i in HumanAssessment])}"
+            )
+            if assessment in [i.value for i in HumanAssessment]:
+                return {"human_assessment": assessment}
 
     def add_additional_information_to_ticket(self, state: TriageState) -> str:
+        user_comment = interrupt("Please add you comment to the ticket")
+
         return state.get("human_assessment")
 
     def route_human_assessment(self, state: TriageState) -> str:
@@ -161,10 +169,12 @@ class TriageWorkflow:
         judge_feedback: str = ""
         if self._judge_current_iteration > 0:
             judge_feedback = f"Your assessment: {state.get('incident_assessment').model_dump()} and the judge assessment {state.get('incident_assessment_judge').model_dump()}"
+        print(state.get("chat_history"))
+        only_user_interactions = [i for i in state.get("chat_history") if isinstance(i, HumanMessage)][:3]
         incident_assessment = triage_request_chain.invoke(
             {
                 "user_query": state.get("user_query"),
-                "chat_history": state.get("chat_history"),
+                "chat_history": "\n".join(only_user_interactions),
                 "judge_feedback": judge_feedback,
             }
         )
@@ -198,6 +208,17 @@ class TriageWorkflow:
         return state["incident_assessment_judge"].overall_assessment
 
     def formulate_ticket_content(self, state: TriageState) -> TriageState:
+        ticket_content_chain = chat_template_ticket_creation | self.chat_model
+        only_user_interactions = [i for i in state.get("chat_history") if isinstance(i, HumanMessage)][:3]
+        ticket_content = ticket_content_chain.invoke(
+            {
+                "user_issue": state.get(),
+                "severity": state(),
+                "reason": state(),
+                "user_query": state(), 
+                
+            }
+        )
         return state
 
     def update_ticket(self, state: TriageState) -> TriageState:
