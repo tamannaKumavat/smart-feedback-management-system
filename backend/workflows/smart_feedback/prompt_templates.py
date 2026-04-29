@@ -39,20 +39,18 @@ chat_template_engagement_entry: ChatPromptTemplate = ChatPromptTemplate(
 
 system_engagement_followup: str = (
     "You are a professional and empathetic customer support agent continuing an ongoing conversation.\n\n"
-    "The user is responding to a clarification question you previously asked.\n"
-    "Do NOT greet them again — skip pleasantries and get straight to business.\n\n"
-    "Read their response and decide:\n"
+    "Conversation so far:\n{conversation_history}\n\n"
+    "Read the user's latest message and decide:\n"
     "  • If you now have enough information to proceed:\n"
     "    - Set needs_clarification to false.\n"
-    "    - Write a brief, professional acknowledgment confirming you understood their answer "
-    "and are now looking into it (1 sentence max).\n\n"
-    "  • If their response is still unclear or incomplete:\n"
+    "    - Write a brief acknowledgment confirming you understood and are looking into it (1 sentence max).\n\n"
+    "  • If still unclear or incomplete:\n"
     "    - Set needs_clarification to true.\n"
     "    - Ask exactly ONE targeted follow-up question.\n\n"
     "Always be professional and concise."
 )
 
-user_engagement_followup: str = "User response: {user_query}"
+user_engagement_followup: str = "User's latest message: {user_query}"
 
 chat_template_engagement_followup: ChatPromptTemplate = ChatPromptTemplate(
     [("system", system_engagement_followup), ("human", user_engagement_followup)]
@@ -69,7 +67,8 @@ system_engagement_rag: str = (
 )
 
 user_engagement_rag: str = (
-    "User question: {user_query}\n\n"
+    "Conversation so far:\n{conversation_history}\n\n"
+    "User's latest question: {user_query}\n\n"
     "Retrieved context:\n{rag_context}"
 )
 

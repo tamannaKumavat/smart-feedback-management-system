@@ -1,8 +1,8 @@
 """HTTP controllers for the chat ticketing system.
 
 This module is intentionally thin: it parses request bodies, delegates
-to :mod:`services.chat_service` and :mod:`services.ai_service`, and
-serialises the results. All business rules (ownership, status
+to :mod:`services.chat_service` and :mod:`workflows.smart_feedback.workflow`,
+and serialises the results. All business rules (ownership, status
 transitions, ticket creation) live in the service layer.
 
 Authentication reuses the existing JWT-based ``get_current_user``
@@ -11,9 +11,10 @@ dependency from :mod:`services.security`.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-from collections.abc import Iterator
+from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -22,11 +23,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from db import SessionLocal, get_db
-from models.chat import Chat, Message, Ticket
+from models.chat import AI_ANSWER_NORMAL, Chat, Message, Ticket, TICKET_STATUS_OPEN
 from models.user import User
-from services import ai_service, attachment_service, chat_service
+from services import attachment_service, chat_service
 from services.chat_service import ChatError
 from services.security import get_current_user
+from workflows.smart_feedback.workflow import build_workflow
 
 router = APIRouter(prefix="/api", tags=["chats"])
 log = logging.getLogger(__name__)
@@ -35,15 +37,6 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Request / response schemas
 # ---------------------------------------------------------------------------
-
-
-class CreateChatResponse(BaseModel):
-    id: str
-    user_id: str = Field(alias="userId")
-    status: str
-    created_at: str = Field(alias="createdAt")
-    updated_at: str = Field(alias="updatedAt")
-    model_config = {"populate_by_name": True}
 
 
 class SendMessageBody(BaseModel):
@@ -143,7 +136,7 @@ def get_chat_messages(
 
 
 @router.post("/messages")
-def send_message(
+async def send_message(
     body: SendMessageBody,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -170,22 +163,41 @@ def send_message(
     except ChatError as e:
         raise _from_chat_error(e) from e
 
-    # Exclude the just-saved user message so the AI prompt doesn't
-    # duplicate it (the user message is appended explicitly inside the
-    # AI service).
-    prior_history = [m for m in history if m.id != user_msg.id]
+    # Build prior history for the workflow — all messages except the one just saved.
+    prior_msgs = [
+        {"sender": m.sender, "content": m.content}
+        for m in history if m.id != user_msg.id
+    ]
 
     if not body.stream:
-        response = ai_service.generate(prior_history, body.content)
-        ai_msg = chat_service.record_ai_message(
-            db, chat, response.content, response.answer_type
-        )
+        try:
+            result = await asyncio.to_thread(
+                build_workflow().run, body.content, prior_msgs
+            )
+        except Exception as exc:
+            log.exception("Workflow failed")
+            raise HTTPException(status_code=500, detail="AI workflow failed") from exc
+        response_text = result.get("engagement_response") or "Thank you, we'll look into this."
+        ticket_summary = result.get("ticket_summary", "")
+        ai_msg = chat_service.record_ai_message(db, chat, response_text, AI_ANSWER_NORMAL)
+        ticket = None
+        if ticket_summary:
+            ticket = Ticket(
+                chat_id=chat.id,
+                user_id=current_user.id,
+                summary=ticket_summary,
+                status=TICKET_STATUS_OPEN,
+            )
+            db.add(ticket)
+            db.commit()
+            db.refresh(ticket)
         db.refresh(chat)
         return {
             "ok": True,
             "chat": _chat_dto(chat),
             "userMessage": _message_dto(user_msg),
             "aiMessage": _message_dto(ai_msg),
+            **({"ticket": _ticket_dto(ticket)} if ticket else {}),
         }
 
     return StreamingResponse(
@@ -193,8 +205,8 @@ def send_message(
             chat_id=chat.id,
             user_id=current_user.id,
             user_msg_dto=_message_dto(user_msg),
-            history=prior_history,
             user_message=body.content,
+            prior_msgs=prior_msgs,
         ),
         media_type="text/event-stream",
         headers={
@@ -208,41 +220,61 @@ def _sse(event: dict[str, Any]) -> str:
     return f"data: {json.dumps(event)}\n\n"
 
 
-def _stream_ai_reply(
+async def _stream_ai_reply(
     chat_id: str,
     user_id: str,
     user_msg_dto: dict[str, Any],
-    history: list[Message],
     user_message: str,
-) -> Iterator[bytes]:
-    """Generator that drives the SSE response.
+    prior_msgs: list[dict],
+) -> AsyncIterator[bytes]:
+    """Async generator that drives the SSE response.
 
-    The request-scoped DB session injected by FastAPI is closed as soon
-    as the route function returns, so we open a fresh session here for
-    the post-stream persistence step.
+    The workflow runs in a thread (asyncio.to_thread) so the event loop
+    stays free while waiting for LLM responses. The request-scoped DB
+    session is closed when the route returns, so a fresh session is opened
+    here for the post-stream persistence step.
     """
     yield _sse({"type": "user_message", "message": user_msg_dto}).encode("utf-8")
 
-    try:
-        chunks, holder = ai_service.stream(history, user_message)
-        for chunk in chunks:
-            yield _sse({"type": "token", "content": chunk}).encode("utf-8")
-    except Exception as exc:  # pragma: no cover - defensive
-        log.exception("AI streaming failed")
-        yield _sse({"type": "error", "message": str(exc)}).encode("utf-8")
-        return
+    ticket_summary = ""
+    response_text = "Thank you, we'll look into this."
 
-    response = holder.response
+    try:
+        result = await asyncio.to_thread(
+            build_workflow().run, user_message, prior_msgs
+        )
+        response_text = result.get("engagement_response") or response_text
+        ticket_summary = result.get("ticket_summary", "")
+    except Exception as exc:
+        log.exception("Workflow streaming failed")
+        yield _sse({"type": "error", "message": str(exc)}).encode("utf-8")
+        response_text = "I'm sorry, I wasn't able to process your request right now. Please try again in a moment."
+
+    chunk_size = 24
+    for i in range(0, len(response_text), chunk_size):
+        yield _sse({"type": "token", "content": response_text[i: i + chunk_size]}).encode("utf-8")
+        await asyncio.sleep(0.02)
+
     db = SessionLocal()
     try:
         chat = chat_service.get_chat_for_user(db, chat_id, user_id)
-        ai_msg = chat_service.record_ai_message(
-            db, chat, response.content, response.answer_type
-        )
+        ai_msg = chat_service.record_ai_message(db, chat, response_text, AI_ANSWER_NORMAL)
+        ticket = None
+        if ticket_summary:
+            ticket = Ticket(
+                chat_id=chat_id,
+                user_id=user_id,
+                summary=ticket_summary,
+                status=TICKET_STATUS_OPEN,
+            )
+            db.add(ticket)
+            db.commit()
+            db.refresh(ticket)
         payload = {
             "type": "done",
             "chat": _chat_dto(chat),
             "aiMessage": _message_dto(ai_msg),
+            **({"ticket": _ticket_dto(ticket)} if ticket else {}),
         }
     except ChatError as e:
         payload = {"type": "error", "message": str(e)}
