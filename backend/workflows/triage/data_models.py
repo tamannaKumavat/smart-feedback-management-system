@@ -29,7 +29,6 @@ class RAGDecision(BaseModel):
 class IncidentAssessment(BaseModel):
     """Is the pydantic model which handles the decision for the .
 
-    support_level (Literal): oes not exactly match the request, not solvable -> Nothing was found
     severity (Literal): Can either be ok -> RAG response was fine, clarification -> The retrieved content does not exactly match the request, not solvable -> Nothing was found
     reason (str): Is the rational behind the decision of the LLM.
     """
@@ -41,12 +40,12 @@ class IncidentAssessment(BaseModel):
     reason: str = Field(
         description="Provides the reason for the given decision", default=""
     )
+    user_issue: str = Field(description="Identifies the correct user issue.")
 
 
 class IncidentAssessmentJudge(BaseModel):
     """Is the pydantic model which handles the decision for the .
 
-    support_level (Literal): oes not exactly match the request, not solvable -> Nothing was found
     severity (Literal): Can either be ok -> RAG response was fine, clarification -> The retrieved content does not exactly match the request, not solvable -> Nothing was found
     reason (str): Is the rational behind the decision of the LLM.
     """
@@ -69,4 +68,5 @@ class TriageState(TypedDict):
     incident_assessment: IncidentAssessment = None
     incident_assessment_judge: IncidentAssessmentJudge = None
     human_assessment: str = ""
+    ticket_content: str = ""
     ticket_id: str = ""
