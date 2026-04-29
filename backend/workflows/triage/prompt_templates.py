@@ -80,40 +80,57 @@ chat_template_rag_ok_response = ChatPromptTemplate(
 # Triage response classification 
 # Definitions from: https://www.atlassian.com/incident-management/incident-response/support-levels 
 
-system_triage_support_level = """You are a helpful support export for assessing the user query in terms of support level and severity. 
+system_triage_support_level = """You are a support triage specialist responsible for accurately assessing user issues and determining appropriate support levels.
 
-You analyse carefully all the provided messages and classify where the user support request should be placed for further processing.
+Your task is to:
+1. Analyze the user's query and conversation history to identify the core issue
+2. Assess the severity based on clear, objective criteria
+3. Provide a clear rationale for your assessment
 
-Assign the severity according to the messages and user requests.
+SEVERITY LEVELS:
 
-Important:
-Be very careful and strict with escalating the support levels
-Level 1 should be preferred in most cases because its the cheapest. 
+**Severity 1 - Resolved/Self-Service Ready**
+- Level 1 support can handle it and its not big of an issue
+- No escalation needed
 
+**Severity 2 - Requires Clarification/Additional Support**
+- User needs personalized guidance or additional details
+- Follow-up from support team would improve resolution
 
-Note the following definitions for the support levels:
+**Severity 3 - Complex/Unable to Resolve**
+- Issue falls outside standard support scope
+- Problem requires investigation, custom solution, or technical expertise
+- Immediate escalation to specialist team needed
 
-# Level 1: Basic help desk
-Agents enter the scene at IT support level one, focusing on minor problems with limited disruptive power at the lowest severity level.
-Level one support staff may also deal with minor software or hardware glitches, such as malfunctioning programs. The user probably needs to reconnect to the network or restart their device. Agents at this level need to identify and correct such hiccups quickly and should have the customer service skills to interact with stressed-out users.
-
-# Level 2: Technical support
-Level two is where agents start digging into technical issues. Severity level three problems may appear in this segment but won’t represent the majority.
-Support staff here need more expertise than basic help desk employees. Their everyday toolkit includes remote access software and time-saving aids like incident management templates. Many companies require level two analysts to obtain credentials such as a computer science degree or specific certifications.
-
-# Level 3: Expert support
-Level three support is the highest in-house tier. When tickets make it this far, they invariably involve severe or extremely complicated incidents. 
-The level three support team is the right choice to handle severe problems because everyone is an expert. Joining this level means obtaining advanced degrees or certifications relevant to niche knowledge. Tasks requiring level three support include integrating software and APIs, server maintenance, and creating and updating standard operating procedures.
-
+GUIDELINES:
+- Be objective and evidence-based in your assessment
+- Only escalate when the user's needs genuinely require it
+- Consider the user's technical level and context
+- Identify the actual problem, not just the surface-level question
 """
 
-user_triage_support_level = """ 
-The user asked the following query: {user_query}
-Please provide the appropriate support and severity level.
-And user interaction is the following: {chat_history}
+user_triage_support_level = """
+CONVERSATION CONTEXT:
+User Query: {user_query}
+
+Chat History:
+{chat_history}
+
 {judge_feedback}
-"""
 
+ANALYSIS REQUIRED:
+
+1. **User Issue**: What is the core problem the user is trying to solve? State it clearly and specifically.
+
+2. **Severity Assessment**: Determine the appropriate severity level (1, 2, or 3) based on:
+   - Whether the user's issue can be resolved with standard resources
+   - The level of clarification or custom support needed
+   - Whether the issue requires specialist intervention
+
+3. **Reason**: Provide a concise, evidence-based rationale for your severity assessment. Reference specific aspects of the conversation that led to your decision.
+
+Ensure your assessment is fair, objective, and based on the user's actual needs rather than cost considerations.
+"""
 
 chat_template_triage_support_level = ChatPromptTemplate(
     [
@@ -146,4 +163,48 @@ chat_template_triage_judge = ChatPromptTemplate(
     ]
 )
 
+#
+# Ticket generation prompt
+#
 
+system_ticket = """You are a support ticket specialist. Your role is to create clear, actionable support tickets based on triage assessments.
+
+Your goal is to:
+1. Transform the assessment into a professional, well-structured ticket
+2. Provide sufficient context for the support team to act immediately
+
+
+TICKET QUALITY STANDARDS:
+- Title should be specific and descriptive (5-10 words max)
+- Description should include: what the user is trying to do, what's happening, and relevant context
+"""
+
+user_ticket = """
+ASSESSMENT RESULT:
+User Issue: {user_issue}
+Severity Level: {severity}
+Triage Reason: {reason}
+
+ORIGINAL CONVERSATION:
+User Query: {user_query}
+Chat History: {chat_history}
+
+CREATE A SUPPORT TICKET:
+
+1. **Title**: A concise, descriptive title that a support agent will immediately understand
+
+2. **Description**: Write a detailed description that includes:
+   - What the user is trying to accomplish
+   - What problem they're experiencing
+   - Any relevant technical details or context from the conversation
+   - User's technical level/background (if apparent)
+
+Ensure the ticket is thorough enough that a support agent can begin work without requesting clarification.
+"""
+
+chat_template_ticket_creation = ChatPromptTemplate(
+    [
+        ("system", system_ticket),
+        ("human", user_ticket),
+    ]
+)
