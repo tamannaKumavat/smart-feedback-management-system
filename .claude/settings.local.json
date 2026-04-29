@@ -1,7 +1,19 @@
 {
   "permissions": {
     "allow": [
-      "Bash(.venv/Scripts/python.exe -c ' *)"
+      "Bash(.venv/Scripts/python.exe -c ' *)",
+      "Bash(.venv/Scripts/pip list *)",
+      "Bash(pip list *)",
+      "Bash(nslookup db.poxyqmsoybrnvhrmrsrm.supabase.co)",
+      "Bash(nslookup aws-0-eu-west-1.pooler.supabase.com)",
+      "Bash(nslookup google.com)",
+      "PowerShell(Get-NetAdapter | Where-Object {$_.Status -eq \"Up\"} | Select-Object Name, InterfaceDescription)",
+      "Bash(ipconfig /all)",
+      "Bash(nslookup aws-0-eu-west-1.pooler.supabase.com 8.8.8.8)",
+      "Bash(.venv/Scripts/python -c \"from config import DATABASE_URL; print\\(repr\\(DATABASE_URL\\)\\)\")",
+      "Bash(.venv/Scripts/python init_db.py)",
+      "Bash(.venv/Scripts/pip show *)",
+      "Bash(.venv/Scripts/pip install *)"
     ]
   }
 }

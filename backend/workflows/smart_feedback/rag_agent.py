@@ -1,149 +1,181 @@
-import json
 import logging
-from pathlib import Path
+
+from sqlalchemy import text
 
 from config import (
     MOCK_MODE,
     WATSONX_API_KEY,
+    WATSONX_EMBEDDING_MODEL_ID,
     WATSONX_PROJECT_ID,
     WATSONX_URL,
-    WATSONX_EMBEDDING_MODEL_ID,
 )
+from db import SessionLocal
 
 logger = logging.getLogger(__name__)
 
-# Path to the knowledge base loaded by the RAG agent.
-# Swap this for a larger document corpus when available.
-_KB_PATH = Path(__file__).parent.parent.parent / "data" / "sample_feedback.json"
-
-# Minimum cosine similarity score for a result to be considered relevant.
-RELEVANCE_THRESHOLD = 0.3
+# Minimum cosine similarity to consider a question "already answered".
+# Below this threshold the triage agent takes over.
+RELEVANCE_THRESHOLD = 0.5
 
 
 class RAGAgent:
-    """Retrieves documents relevant to a user query.
+    """Q&A lookup against the rag_chunks pgvector table.
 
-    In MOCK_MODE it uses simple keyword-overlap scoring so the workflow can
-    run without real WatsonX credentials.  In live mode it embeds both the
-    query and the knowledge-base documents using the WatsonX embedding model
-    defined by WATSONX_EMBEDDING_MODEL_ID and ranks by cosine similarity.
+    Embeds the incoming user query, finds the most similar past question,
+    and returns the answer that was stored for that question — no generation
+    needed. If nothing is similar enough, the triage agent handles the request.
+
+    Each result contains:
+      question_text — the matched past question
+      answer_text   — the answer to return directly
+      score         — cosine similarity (0–1)
+      source_type   — "policy" or "ticket"
+      doc_id / doc_version / chunk_id  (policy rows)
+      case_id                          (ticket rows)
+      language, department, severity, intent
     """
 
     def __init__(self):
-        self.mock_mode = MOCK_MODE
-        self._documents: list[dict] = []
         self._embeddings_model = None
-        self._doc_vectors = None  # numpy array, shape (n_docs, embedding_dim)
-
-        self._load_documents()
-        if not self.mock_mode:
+        if not MOCK_MODE:
             self._init_embeddings()
 
-    # Initialisation helpers
-    def _load_documents(self) -> None:
-        """Parse the knowledge-base JSON file into a flat list of documents."""
-        try:
-            with open(_KB_PATH, "r", encoding="utf-8") as fh:
-                raw: list[dict] = json.load(fh)
-
-            for item in raw:
-                for msg in item.get("conversation", []):
-                    if msg.get("sender") == "user":
-                        self._documents.append(
-                            {
-                                "text": msg["content"],
-                                "source": item.get("case_id", "unknown"),
-                                "metadata": {
-                                    "intent": item.get("labels", {}).get("intent", ""),
-                                    "severity": item.get("labels", {}).get("severity", ""),
-                                },
-                            }
-                        )
-            logger.info("RAGAgent: loaded %d documents.", len(self._documents))
-        except Exception as exc:
-            logger.error("RAGAgent: failed to load documents: %s", exc)
-
     def _init_embeddings(self) -> None:
-        """Embed all documents at startup so search is fast at query time."""
         try:
-            import numpy as np
             from langchain_ibm import WatsonxEmbeddings
-
             self._embeddings_model = WatsonxEmbeddings(
                 model_id=WATSONX_EMBEDDING_MODEL_ID,
                 url=WATSONX_URL,
                 apikey=WATSONX_API_KEY,
                 project_id=WATSONX_PROJECT_ID,
             )
-
-            texts = [d["text"] for d in self._documents]
-            if texts:
-                vecs = self._embeddings_model.embed_documents(texts)
-                self._doc_vectors = np.array(vecs, dtype=float)
-                logger.info("RAGAgent: pre-embedded %d documents.", len(texts))
+            logger.info("RAGAgent: embeddings initialised.")
         except Exception as exc:
             logger.error("RAGAgent: failed to initialise embeddings: %s", exc)
-            self._embeddings_model = None
-            self._doc_vectors = None
 
-    # Search
     def search(self, query: str, top_k: int = 3) -> list[dict]:
-        """Return the top-k most relevant documents for *query*.
+        """Return up to top_k answers for similar past questions.
 
-        Each result dict contains: text, score (float 0-1), source, metadata.
+        Returns an empty list if no match exceeds RELEVANCE_THRESHOLD,
+        signalling the triage agent to handle the request.
         """
-        if self.mock_mode or self._embeddings_model is None:
+        if MOCK_MODE or self._embeddings_model is None:
             return self._keyword_search(query, top_k)
-        return self._embedding_search(query, top_k)
+        return self._vector_search(query, top_k)
 
-    def _keyword_search(self, query: str, top_k: int) -> list[dict]:
-        """Keyword-overlap scoring — used in mock mode."""
-        query_terms = set(query.lower().split())
-        results: list[dict] = []
-
-        for doc in self._documents:
-            doc_terms = set(doc["text"].lower().split())
-            overlap = len(query_terms & doc_terms)
-            score = overlap / max(len(query_terms), 1)
-            results.append(
-                {
-                    "text": doc["text"],
-                    "score": round(score, 3),
-                    "source": doc["source"],
-                    "metadata": doc["metadata"],
-                }
-            )
-
-        results.sort(key=lambda r: r["score"], reverse=True)
-        return results[:top_k]
-
-    def _embedding_search(self, query: str, top_k: int) -> list[dict]:
-        """Cosine-similarity search using WatsonX embeddings."""
+    # Vector search (live mode)
+    def _vector_search(self, query: str, top_k: int) -> list[dict]:
         try:
-            import numpy as np
+            query_vec = self._embeddings_model.embed_query(query)
+            vec_str = "[" + ",".join(str(v) for v in query_vec) + "]"
 
-            query_vec = np.array(
-                self._embeddings_model.embed_query(query), dtype=float
-            )
+            # Search both question and answer embeddings; take the best score.
+            # question_embedding match → user phrased query like a past question
+            # answer_embedding match   → user used terminology from the answer
+            sql = text("""
+                SELECT
+                    question_text,
+                    answer_text,
+                    source_type,
+                    doc_id,
+                    doc_version,
+                    chunk_id,
+                    case_id,
+                    language,
+                    department,
+                    severity,
+                    intent,
+                    GREATEST(
+                        1 - (question_embedding <=> CAST(:vec AS vector)),
+                        1 - (answer_embedding   <=> CAST(:vec AS vector))
+                    ) AS score,
+                    CASE
+                        WHEN (1 - (question_embedding <=> CAST(:vec AS vector))) >=
+                             (1 - (answer_embedding   <=> CAST(:vec AS vector)))
+                        THEN 'question' ELSE 'answer'
+                    END AS matched_on
+                FROM rag_chunks
+                WHERE GREATEST(
+                    1 - (question_embedding <=> CAST(:vec AS vector)),
+                    1 - (answer_embedding   <=> CAST(:vec AS vector))
+                ) >= :threshold
+                ORDER BY score DESC
+                LIMIT :top_k
+            """)
 
-            scores: list[float] = []
-            for doc_vec in self._doc_vectors:
-                norm = float(np.linalg.norm(query_vec) * np.linalg.norm(doc_vec))
-                scores.append(float(np.dot(query_vec, doc_vec)) / norm if norm else 0.0)
+            db = SessionLocal()
+            try:
+                rows = db.execute(sql, {
+                    "vec": vec_str,
+                    "threshold": RELEVANCE_THRESHOLD,
+                    "top_k": top_k,
+                }).fetchall()
+            finally:
+                db.close()
 
-            top_indices = sorted(
-                range(len(scores)), key=lambda i: scores[i], reverse=True
-            )[:top_k]
+            return [self._row_to_dict(row) for row in rows]
 
-            return [
-                {
-                    "text": self._documents[i]["text"],
-                    "score": round(scores[i], 3),
-                    "source": self._documents[i]["source"],
-                    "metadata": self._documents[i]["metadata"],
-                }
-                for i in top_indices
-            ]
         except Exception as exc:
-            logger.error("RAGAgent._embedding_search failed: %s — using keyword fallback.", exc)
+            logger.error("RAGAgent._vector_search failed: %s — falling back to keyword.", exc)
             return self._keyword_search(query, top_k)
+
+    # Keyword search (mock / fallback)
+    def _keyword_search(self, query: str, top_k: int) -> list[dict]:
+        words = [w.strip() for w in query.split() if len(w.strip()) > 2]
+        if not words:
+            return []
+
+        # Search both question and answer text fields
+        like_clauses = " OR ".join(
+            f"question_text ILIKE :w{i} OR answer_text ILIKE :w{i}"
+            for i in range(len(words))
+        )
+        params: dict = {"top_k": top_k}
+        for i, w in enumerate(words):
+            params[f"w{i}"] = f"%{w}%"
+
+        sql = text(f"""
+            SELECT
+                question_text,
+                answer_text,
+                source_type,
+                doc_id,
+                doc_version,
+                chunk_id,
+                case_id,
+                language,
+                department,
+                severity,
+                intent,
+                0.6 AS score,
+                'keyword' AS matched_on
+            FROM rag_chunks
+            WHERE {like_clauses}
+            LIMIT :top_k
+        """)
+
+        db = SessionLocal()
+        try:
+            rows = db.execute(sql, params).fetchall()
+        finally:
+            db.close()
+
+        return [self._row_to_dict(row) for row in rows]
+
+    @staticmethod
+    def _row_to_dict(row) -> dict:
+        return {
+            "question_text": row.question_text,
+            "answer_text": row.answer_text,
+            "score": round(float(row.score), 3),
+            "matched_on": row.matched_on,   # "question" | "answer" | "keyword"
+            "source_type": row.source_type,
+            "doc_id": row.doc_id,
+            "doc_version": row.doc_version,
+            "chunk_id": row.chunk_id,
+            "case_id": row.case_id,
+            "language": row.language,
+            "department": row.department,
+            "severity": row.severity,
+            "intent": row.intent,
+        }

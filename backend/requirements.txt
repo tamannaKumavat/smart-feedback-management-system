@@ -15,3 +15,5 @@ langgraph
 pydantic
 numpy
 typing-extensions
+sqlalchemy
+psycopg
