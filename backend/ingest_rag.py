@@ -50,10 +50,7 @@ def _pick(d: dict, fields: tuple[str, ...]) -> str:
     return ""
 
 
-# ---------------------------------------------------------------------------
 # Extraction
-# ---------------------------------------------------------------------------
-
 def _extract_from_jsonl(path: Path) -> list[dict]:
     """One row per (user_question, retrieved_chunk) pair from every record.
 
@@ -178,10 +175,7 @@ def _extract_from_jsonl(path: Path) -> list[dict]:
 #     return pairs
 
 
-# ---------------------------------------------------------------------------
 # Embedding
-# ---------------------------------------------------------------------------
-
 def _embed(texts: list[str], mock: bool, label: str = "") -> list[list[float]]:
     from models.rag import EMBEDDING_DIM
 
@@ -214,11 +208,7 @@ def _embed(texts: list[str], mock: bool, label: str = "") -> list[list[float]]:
 
     return all_vectors
 
-
-# ---------------------------------------------------------------------------
 # Main
-# ---------------------------------------------------------------------------
-
 def main(dry_run: bool = False) -> None:
     from config import MOCK_MODE
     from db import Base, SessionLocal, engine

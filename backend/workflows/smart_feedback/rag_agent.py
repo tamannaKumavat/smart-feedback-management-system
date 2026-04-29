@@ -63,10 +63,7 @@ class RAGAgent:
             return self._keyword_search(query, top_k)
         return self._vector_search(query, top_k)
 
-    # ------------------------------------------------------------------
     # Vector search (live mode)
-    # ------------------------------------------------------------------
-
     def _vector_search(self, query: str, top_k: int) -> list[dict]:
         try:
             query_vec = self._embeddings_model.embed_query(query)
@@ -122,10 +119,7 @@ class RAGAgent:
             logger.error("RAGAgent._vector_search failed: %s — falling back to keyword.", exc)
             return self._keyword_search(query, top_k)
 
-    # ------------------------------------------------------------------
     # Keyword search (mock / fallback)
-    # ------------------------------------------------------------------
-
     def _keyword_search(self, query: str, top_k: int) -> list[dict]:
         words = [w.strip() for w in query.split() if len(w.strip()) > 2]
         if not words:
@@ -167,8 +161,6 @@ class RAGAgent:
             db.close()
 
         return [self._row_to_dict(row) for row in rows]
-
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _row_to_dict(row) -> dict:
