@@ -130,7 +130,6 @@ export default function ClientCreateTicket() {
 
   const scrollRef = useRef(null);
   const chatRef = useRef(null);
-  const fileInputRef = useRef(null);
 
   // Keep a ref so the unmount cleanup sees the latest chat without
   // re-running the effect on every chat change.
@@ -381,60 +380,7 @@ export default function ClientCreateTicket() {
       msg.id === latestSummaryId &&
       awaitingConfirmation;
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-    const trimmedInput = messageInput.trim();
-    if (!trimmedInput && !attachedFile) return;
-
-    const t = formatNowTime();
-    const userText = trimmedInput || `Attached: ${attachedFile?.name}`;
-    const userLine = {
-      kind: "message",
-      id: `u-${Date.now()}`,
-      role: "user",
-      author: "You",
-      time: t,
-      text: userText,
-      file: attachedFile ? attachedFile.name : undefined,
-    };
-    const loadingId = `a-${Date.now()}`;
-    const loadingLine = {
-      kind: "message",
-      id: loadingId,
-      role: "assistant",
-      author: "Ruag Team",
-      time: t,
-      text: "…",
-    };
-
-    setMessages((prev) => [...prev, userLine, loadingLine]);
-    setMessageInput("");
-    setAttachedFile(null);
-
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_query: userText, is_first_message: isFirstMessage }),
-      });
-      setIsFirstMessage(false);
-      const data = await res.json().catch(() => ({}));
-      const reply = res.ok
-        ? (data.response || "Thank you for your message. We’ll follow up shortly.")
-        : (data.detail || "Something went wrong. Please try again.");
-      setMessages((prev) =>
-        prev.map((m) => (m.id === loadingId ? { ...m, text: reply } : m))
-      );
-    } catch {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === loadingId
-            ? { ...m, text: "Could not reach the server. Please try again." }
-            : m
-        )
-      );
-    }
-    return (
+  return (
       <article
         key={msg.id}
         className={

@@ -53,13 +53,16 @@ class AnalysisAgentResult(BaseModel):
 
 class SmartFeedbackState(TypedDict):
     user_query: str
+    prior_history: list            # [{sender, content}] from DB — conversation so far
     chat_history: Annotated[list, add_messages]
     is_first_message: bool         # True only on the user's very first message in a session
     needs_clarification: bool      # set by engagement Phase 1; routes to END when True
     human_assessment: str
     ticket_id: str
     analysis_agent_result: AnalysisAgentResult   # None until analysis_agent runs
-    rag_results: list              # list of dicts: {text, score, source, metadata}
+    rag_results: list              # list of dicts from RAGAgent.search()
     rag_workflow_state: dict
     triage_workflow_state: dict
     engagement_response: str       # last message sent back to the user
+    ready_to_create_ticket: bool   # True after Phase 2
+    ticket_summary: str            # set by create_ticket node; non-empty → auto-save ticket
