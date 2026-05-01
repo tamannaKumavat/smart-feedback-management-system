@@ -42,7 +42,7 @@ def _format_history(prior_history: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def build_workflow() -> "SmartFeedbackWorkflow":
+def build_workflow(checkpointer: Any=None, graph_config: dict={}) -> "SmartFeedbackWorkflow":
     """Construct a SmartFeedbackWorkflow with the correct chat model for the current config."""
     from config import MOCK_MODE
 
@@ -50,7 +50,7 @@ def build_workflow() -> "SmartFeedbackWorkflow":
         chat_model = _build_mock_chat_model()
     else:
         chat_model = _build_live_chat_model()
-    return SmartFeedbackWorkflow(chat_model)
+    return SmartFeedbackWorkflow(chat_model, checkpointer=checkpointer, graph_config=graph_config)
 
 
 def _build_live_chat_model():
