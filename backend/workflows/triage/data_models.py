@@ -1,29 +1,11 @@
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
-from typing import Annotated, Literal
+from typing import Annotated, Literal, List
 from langgraph.graph.message import add_messages
 from workflows.triage.constants import (
-    RAGEvaluationDecision,
     TriageJudgeDecision,
 )
-
-
-class RAGDecision(BaseModel):
-    """Is the pydantic model which handles the decision of the RAG result.
-
-    decision (Literal): Can either be ok -> RAG response was fine, clarification -> The retrieved content does not exactly match the request, not solvable -> Nothing was found
-    reason (str): Is the rational behind the decision of the LLM.
-    """
-
-    decision: RAGEvaluationDecision = (
-        Field(
-            description="The specific literate of the decision",
-        )
-    )
-    reason: str = Field(
-        description="Provides the reason for the given decision", default=""
-    )
-
+from operator import add
 
 
 class IncidentAssessment(BaseModel):
@@ -64,9 +46,8 @@ class TriageState(TypedDict):
     final_user_response: str = ""
     rag_results: list = []
     chat_history: Annotated[list, add_messages]  # For keeping track of the messages
-    rag_decision: RAGDecision = None
-    incident_assessment: IncidentAssessment = None
-    incident_assessment_judge: IncidentAssessmentJudge = None
+    incident_assessment: Annotated[List[IncidentAssessment], add]
+    incident_assessment_judge: Annotated[List[IncidentAssessmentJudge], add]
     human_assessment: str = ""
     ticket_content: str = ""
     ticket_id: str = ""
