@@ -3,7 +3,9 @@ from fastapi import WebSocket, WebSocketDisconnect, APIRouter
 from langgraph.types import Command
 from langchain_ollama import ChatOllama
 from workflows.smart_feedback.workflow import SmartFeedbackWorkflow
-import uuid 
+import uuid
+import json
+from datetime import datetime
 
 
 
@@ -50,15 +52,46 @@ async def websocket_endpoint(websocket: WebSocket):
                 version="v2",
                 debug=True
             ):  
-                await websocket.send_text(f"{chunk}")
-                if chunk["type"] == "updates":
-                    if "__interrupt__" in chunk["data"]:
+                # --- ONLY CHANGE: Format the response for the frontend ---
+                if isinstance(chunk, dict):
+                    if "type" in chunk and chunk["type"] == "updates":
+                        if "__interrupt__" in chunk.get("data", {}):
+                            # Ask for clarification
+                            response = await websocket.receive_text()
+                            user_input = Command(resume=response)
+                        
+                            await websocket.send_text(json.dumps({
+                                "type": "token",
+                                "token": str(chunk.get("data", "")),
+                            }))
+                        elif "end_node" in chunk.get("data", {}):
+                            # Send final message
+                            await websocket.send_text(json.dumps({
+                                "type": "message",
+                                "message": {
+                                    "id": str(uuid.uuid4()),
+                                    "sender": "ai",
+                                    "content": chunk["data"].get("engagement_response", ""),
+                                    "aiAnswerType": "normal",
+                                    "createdAt": datetime.utcnow().isoformat(),
+                                }
+                            }))
+                            should_run = False
+                    else:
+                        # Fallback: Send raw chunk as token (for debugging)
+                        await websocket.send_text(json.dumps({
+                            "type": "token",
+                            "token": str(chunk),
+                        }))
+                else:
+                    # Fallback for non-dict chunks
+                    await websocket.send_text(json.dumps({
+                        "type": "token",
+                        "token": str(chunk),
+                    }))
 
-                        response = await websocket.receive_text()
-                        user_input = Command(resume=response)
-
-            if "end_node" in chunk["data"]:
-                should_run = False            
+            if "end_node" in chunk.get("data", {}):
+                should_run = False      
 
     except WebSocketDisconnect:
         print("Client disconnected")
