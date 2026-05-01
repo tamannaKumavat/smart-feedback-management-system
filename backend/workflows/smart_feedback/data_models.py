@@ -1,5 +1,6 @@
 from typing_extensions import TypedDict
-from typing import Annotated
+from typing import Annotated, List
+from operator import add
 from langgraph.graph.message import add_messages
 
 from pydantic import BaseModel, Field
@@ -10,6 +11,7 @@ from workflows.smart_feedback.constants import (
     AnalysisAgentUrgency,
     AnalysisAgentIssueType,
 )
+from workflows.triage.data_models import IncidentAssessment, IncidentAssessmentJudge
 
 class EngagementDecision(BaseModel):
     """Structured output for the engagement agent's first-phase decision."""
@@ -62,7 +64,9 @@ class SmartFeedbackState(TypedDict):
     analysis_agent_result: AnalysisAgentResult   # None until analysis_agent runs
     rag_results: list              # list of dicts from RAGAgent.search()
     rag_workflow_state: dict
-    triage_workflow_state: dict
+    triage_workflow: dict
     engagement_response: str       # last message sent back to the user
     ready_to_create_ticket: bool   # True after Phase 2
     ticket_summary: str            # set by create_ticket node; non-empty → auto-save ticket
+    incident_assessment: Annotated[List[IncidentAssessment], add]
+    incident_assessment_judge: Annotated[List[IncidentAssessmentJudge], add]
