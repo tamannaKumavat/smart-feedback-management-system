@@ -50,16 +50,26 @@ async def websocket_endpoint(websocket: WebSocket):
                 debug=True
             ):  
 
+
                 if "type" in chunk and chunk["type"] == "updates":
+                    # Stream tokens to the client
+                    # Check if system needs user input
                     if "__interrupt__" in chunk.get("data", {}):
-                        # Ask for clarification
-                        response = await websocket.receive_text()
-                        user_input = Command(resume=response)
-                    
+                        # Send interrupt signal to enable user input on client
                         await websocket.send_text(json.dumps({
                             "type": "token",
-                            "token": str(chunk.get("data", "")),
+                            "token": str(chunk["data"]["__interrupt__"][-1].value),
+                            "token_type": chunk["type"]
                         }))
+                        await websocket.send_text(json.dumps({
+                            "type": "interrupt",
+                            "message": "Waiting for user input..."
+                        }))
+                        
+                        # Wait for user response
+                        user_response = await websocket.receive_text()
+                        user_message = json.loads(user_response)
+                        user_input = Command(resume=user_message.get("content"))
                     elif "end_node" in chunk.get("data", {}):
                         # Send final message
                         await websocket.send_text(json.dumps({
@@ -73,12 +83,19 @@ async def websocket_endpoint(websocket: WebSocket):
                             }
                         }))
                         should_run = False
-                else:
-                    # Fallback: Send raw chunk as token (for debugging)
-                    await websocket.send_text(json.dumps({
-                        "type": "token",
-                        "token": str(chunk),
-                    }))
+                    elif "engagement_with_user" in chunk.get("data", {}):
+                        await websocket.send_text(json.dumps({
+                            "type": "token",
+                            "token": str(chunk["data"]["engagement_with_user"]["engagement_response"]),
+                            "token_type": chunk["type"]
+                        }))
+                    else:
+                        await websocket.send_text(json.dumps({
+                            "type": "token",
+                            "token": str(chunk["data"]),
+                            "token_type": chunk["type"]
+                        }))
+
             if "end_node" in chunk.get("data", {}):
                 should_run = False      
         await websocket.close()
