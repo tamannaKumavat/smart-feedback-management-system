@@ -379,10 +379,10 @@ class SmartFeedbackWorkflow:
         }
 
     def rag_search_workflow(self, state: SmartFeedbackState) -> dict:
-        results = [{}]
-        # results: list[dict] = self._rag_agent.search(
-        #    query=state["user_query"], top_k=3
-        # )
+        
+        results: list[dict] = self._rag_agent.search(
+            query=state["user_query"], top_k=3
+        )
         return {"rag_results": results}
 
     def analysis_agent(self, state: SmartFeedbackState) -> dict:
