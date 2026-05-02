@@ -355,19 +355,17 @@ class SmartFeedbackWorkflow:
                 "chat_history": [response],
             }
 
-        # Phase 1: warm greeting on first message, plain follow-up on subsequent ones
-        template = (
-            chat_template_engagement_entry
-            if state.get("is_first_message", True)
-            else chat_template_engagement_followup
-        )
+
         if state.get("is_first_message", True):
             answer = interrupt("How can I help you with today?")
+            state["user_query"] = answer
+            chain = chat_template_engagement_entry | self.chat_model.with_structured_output(EngagementDecision)
+            decision: EngagementDecision = chain.invoke({"user_query": state["user_query"]})
         else:
             answer = interrupt("Please clarify request.")
-        state["user_query"] = answer
-        chain = template | self.chat_model.with_structured_output(EngagementDecision)
-        decision: EngagementDecision = chain.invoke({"user_query": state["user_query"]})
+            state["user_query"] = answer
+            chain = chat_template_engagement_followup | self.chat_model.with_structured_output(EngagementDecision)
+            decision: EngagementDecision = chain.invoke({"user_query": state["user_query"], "conversation_history": state["chat_history"]})
 
         return {
             "user_query": answer,
@@ -377,6 +375,7 @@ class SmartFeedbackWorkflow:
                 HumanMessage(content=state["user_query"]),
                 AIMessage(content=decision.response),
             ],
+            "is_first_message": False,
         }
 
     def rag_search_workflow(self, state: SmartFeedbackState) -> dict:
