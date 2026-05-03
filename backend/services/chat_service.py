@@ -239,3 +239,28 @@ def confirm_summary(
     db.refresh(ticket)
     db.refresh(chat)
     return chat, ticket
+
+def update_ticket(
+    db: Session,
+    ticket_id: int,
+    user_id: str,
+    status: str | None = None,
+    summary: str | None = None,
+) -> Ticket:
+    """Update specific ticket fields."""
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    
+    if ticket is None:
+        raise ChatError("Ticket not found", http_status=404)
+    
+    if ticket.user_id != user_id:
+        raise ChatError("Not authorized to update this ticket", http_status=403)
+    
+    if status is not None:
+        ticket.status = status
+    if summary is not None:
+        ticket.summary = summary
+    
+    db.commit()
+    db.refresh(ticket)
+    return ticket
