@@ -74,6 +74,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         # Send final message
                         await websocket.send_text(json.dumps({
                             "type": "message",
+
                             "message": {
                                 "id": str(uuid.uuid4()),
                                 "sender": "ai",
@@ -86,15 +87,25 @@ async def websocket_endpoint(websocket: WebSocket):
                     elif "engagement_with_user" in chunk.get("data", {}):
                         await websocket.send_text(json.dumps({
                             "type": "token",
-                            "token": str(chunk["data"]["engagement_with_user"]["engagement_response"]),
+                            "token": str(chunk["data"]["engagement_with_user"]["engagement_response"]) + "\n",
                             "token_type": chunk["type"]
                         }))
-                    else:
+
+                    elif "formulate_ticket_content" in chunk.get("data", {}):
+                        print(f"formulate ticket chunk: {chunk}")
                         await websocket.send_text(json.dumps({
-                            "type": "token",
-                            "token": str(chunk["data"]),
-                            "token_type": chunk["type"]
-                        }))
+                                    "type": "token",
+                                    "token": str(chunk["data"]["formulate_ticket_content"]["ticket_summary"]),
+                                    "token_type": chunk["type"]
+                                }))
+                    else:
+                        #    
+                        #await websocket.send_text(json.dumps({
+                        #    "type": "token",
+                        #    "token": str(chunk["data"]),
+                        #    "token_type": chunk["type"]
+                        #}))
+                        pass
 
             if "end_node" in chunk.get("data", {}):
                 should_run = False      
