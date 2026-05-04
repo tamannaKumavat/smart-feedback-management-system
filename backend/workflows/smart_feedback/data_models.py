@@ -63,6 +63,7 @@ class SmartFeedbackState(TypedDict):
     ticket_id: str
     analysis_agent_result: AnalysisAgentResult   # None until analysis_agent runs
     rag_results: list              # list of dicts from RAGAgent.search()
+    rag_user_assessment: str
     rag_workflow_state: dict
     triage_workflow: dict
     engagement_response: str       # last message sent back to the user

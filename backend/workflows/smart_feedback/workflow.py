@@ -42,7 +42,9 @@ def _format_history(prior_history: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def build_workflow(checkpointer: Any=None, graph_config: dict={}) -> "SmartFeedbackWorkflow":
+def build_workflow(
+    checkpointer: Any = None, graph_config: dict = {}
+) -> "SmartFeedbackWorkflow":
     """Construct a SmartFeedbackWorkflow with the correct chat model for the current config."""
     from config import MOCK_MODE
 
@@ -50,7 +52,9 @@ def build_workflow(checkpointer: Any=None, graph_config: dict={}) -> "SmartFeedb
         chat_model = _build_mock_chat_model()
     else:
         chat_model = _build_live_chat_model()
-    return SmartFeedbackWorkflow(chat_model, checkpointer=checkpointer, graph_config=graph_config)
+    return SmartFeedbackWorkflow(
+        chat_model, checkpointer=checkpointer, graph_config=graph_config
+    )
 
 
 def _build_live_chat_model():
@@ -228,6 +232,7 @@ class SmartFeedbackWorkflow:
         workflow.add_node("create_ticket", self.create_ticket)
         workflow.add_node("analysis_agent", self.analysis_agent)
         workflow.add_node("rag_search_workflow", self.rag_search_workflow)
+        workflow.add_node("rag_result_user_assessment", self.rag_result_user_assessment)
 
         # Add edges
         workflow.add_edge(START, "engagement_with_user")
@@ -239,6 +244,7 @@ class SmartFeedbackWorkflow:
             {
                 "clarify": "engagement_with_user",
                 "proceed": "create_ticket",
+                "rag_user_assessment": "rag_result_user_assessment",
             },
         )
 
@@ -257,6 +263,15 @@ class SmartFeedbackWorkflow:
             {
                 "respond": "engagement_with_user",  # RAG sufficient — answer returned to user
                 "triage": "triage_request",  # RAG insufficient — escalate to triage
+            },
+        )
+
+        workflow.add_conditional_edges(
+            "rag_result_user_assessment",
+            self._route_rag_user_assessment,  # New method to check RAG sufficiency
+            {
+                "yes": "end_node",  # RAG answer sufficient -> User can end now
+                "no": "engagement_with_user",  # RAG result insufficient -> clarify
             },
         )
         workflow.add_node("analysis_rag_results", self.analysis_rag_results)
@@ -310,6 +325,12 @@ class SmartFeedbackWorkflow:
         if state.get("analysis_agent_result") is None:
             return "clarify" if state.get("needs_clarification", False) else "proceed"
         # If we reach here, it's Phase 2 (RAG results are available)
+        print(
+            f"user assessment: {state.get('rag_results', []) and state.get('engagement_response', '')}, Engagement response: {state.get('engagement_response', '')}"
+        )
+        if state.get("rag_results", []) and state.get("engagement_response", ""):
+            return "rag_user_assessment"
+
         return "proceed"  # Proceed to create_ticket (fan-out)
 
     def _route_rag_results(self, state: SmartFeedbackState) -> str:
@@ -333,6 +354,25 @@ class SmartFeedbackWorkflow:
         )
         return "respond" if rag_sufficient else "triage"
 
+    def rag_result_user_assessment(self, state: SmartFeedbackState):
+        response = interrupt(
+            "Please state if this answers you question. Either yes or no"
+        )
+        updated_state = {}
+        if response.lower() not in ["yes", "no"]:
+            response = "no"
+        if response.lower() == "no":
+            updated_state["rag_results"] = []
+            updated_state["analysis_agent_result"] = None
+        updated_state["rag_user_assessment"] = response.lower()
+
+        return updated_state
+
+    def _route_rag_user_assessment(self, state: SmartFeedbackState):
+        if state.get("rag_user_assessment", "no"):
+            return "no"
+        return "end"
+
     def engagement_with_user(self, state: SmartFeedbackState) -> dict:
         if state.get("analysis_agent_result") is not None:
             # Phase 2: compose answer from RAG context
@@ -355,17 +395,29 @@ class SmartFeedbackWorkflow:
                 "chat_history": [response],
             }
 
-
         if state.get("is_first_message", True):
             answer = interrupt("How can I help you with today?")
             state["user_query"] = answer
-            chain = chat_template_engagement_entry | self.chat_model.with_structured_output(EngagementDecision)
-            decision: EngagementDecision = chain.invoke({"user_query": state["user_query"]})
+            chain = (
+                chat_template_engagement_entry
+                | self.chat_model.with_structured_output(EngagementDecision)
+            )
+            decision: EngagementDecision = chain.invoke(
+                {"user_query": state["user_query"]}
+            )
         else:
             answer = interrupt("Please clarify request.")
             state["user_query"] = answer
-            chain = chat_template_engagement_followup | self.chat_model.with_structured_output(EngagementDecision)
-            decision: EngagementDecision = chain.invoke({"user_query": state["user_query"], "conversation_history": state["chat_history"]})
+            chain = (
+                chat_template_engagement_followup
+                | self.chat_model.with_structured_output(EngagementDecision)
+            )
+            decision: EngagementDecision = chain.invoke(
+                {
+                    "user_query": state["user_query"],
+                    "conversation_history": state["chat_history"],
+                }
+            )
 
         return {
             "user_query": answer,
@@ -379,10 +431,8 @@ class SmartFeedbackWorkflow:
         }
 
     def rag_search_workflow(self, state: SmartFeedbackState) -> dict:
-        
-        results: list[dict] = self._rag_agent.search(
-            query=state["user_query"], top_k=3
-        )
+
+        results: list[dict] = self._rag_agent.search(query=state["user_query"], top_k=3)
         return {"rag_results": results}
 
     def analysis_agent(self, state: SmartFeedbackState) -> dict:
