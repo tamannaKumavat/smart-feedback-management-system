@@ -10,9 +10,9 @@ import {
   getMessages,
   markChatAsDraft,
   resumeChat,
-  sendMessageStream,
   uploadAttachment,
 } from "../../lib/chatApi.js";
+import { getToken } from "../../lib/session.js";
 import { showError, showSuccess } from "../../lib/toast.js";
 
 const MAX_UPLOAD_MB = 10;
@@ -130,6 +130,9 @@ export default function ClientCreateTicket() {
 
   const scrollRef = useRef(null);
   const chatRef = useRef(null);
+  const wsRef = useRef(null);
+  const pendingFirstMessage = useRef(null);
+  const streamingContentRef = useRef("");
 
   // Keep a ref so the unmount cleanup sees the latest chat without
   // re-running the effect on every chat change.
@@ -172,14 +175,22 @@ export default function ClientCreateTicket() {
 
   // If the user navigates away mid-conversation, demote to draft so it
   // shows up in /client/drafts. Closed chats are skipped server-side.
+  // For fresh chats, also open the WS immediately so the backend greeting
+  // arrives before the user types their first message.
   useEffect(() => {
+    if (!resumeId) connectWS(null);
     return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
       const current = chatRef.current;
       if (!current) return;
       if (current.status === "active" || current.status === "waiting_confirmation") {
         markChatAsDraft(current.id);
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -204,6 +215,72 @@ export default function ClientCreateTicket() {
     setChat(created.chat);
     return created.chat;
   }, [chat]);
+
+  function handleWsMessage(data) {
+    if (data.type === "token") {
+      const newContent = (streamingContentRef.current ?? "") + data.token;
+      streamingContentRef.current = newContent;
+      setStreamingDraft({ id: "streaming", content: newContent });
+    } else if (data.type === "interrupt") {
+      const committed = streamingContentRef.current;
+      streamingContentRef.current = "";
+      setStreamingDraft(null);
+      if (committed) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `ai-${Date.now()}`,
+            chatId: chatRef.current?.id,
+            sender: "ai",
+            content: committed,
+            aiAnswerType: "normal",
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+      }
+      if (pendingFirstMessage.current) {
+        const msg = pendingFirstMessage.current;
+        pendingFirstMessage.current = null;
+        wsRef.current?.send(JSON.stringify({ content: msg }));
+        setStreamingDraft({ id: "streaming", content: "" });
+      } else {
+        setSending(false);
+      }
+    } else if (data.type === "message") {
+      setMessages((prev) => [...prev, data.message]);
+      streamingContentRef.current = "";
+      setStreamingDraft(null);
+      setSending(false);
+    }
+  }
+
+  function connectWS(chatId) {
+    if (wsRef.current) wsRef.current.close();
+    setSending(true);
+    const token = getToken();
+    const params = new URLSearchParams();
+    if (token) params.set("token", token);
+    if (chatId) params.set("chat_id", chatId);
+    const ws = new WebSocket(
+      `ws://${window.location.hostname}:8000/ws/chat?${params}`,
+    );
+    wsRef.current = ws;
+    ws.onmessage = (e) => {
+      try {
+        handleWsMessage(JSON.parse(e.data));
+      } catch (err) {
+        console.error("WS parse error", err);
+      }
+    };
+    ws.onerror = () => {
+      showError("WebSocket connection error");
+      setSending(false);
+      setStreamingDraft(null);
+    };
+    ws.onclose = () => {
+      wsRef.current = null;
+    };
+  }
 
   function handleOpenFilePicker() {
     fileInputRef.current?.click();
@@ -254,15 +331,13 @@ export default function ClientCreateTicket() {
       return;
     }
 
-    let attachmentIds = [];
     if (fileToSend) {
       setUploading(true);
       try {
-        const att = await uploadAttachment({
+        await uploadAttachment({
           chatId: activeChat.id,
           file: fileToSend,
         });
-        attachmentIds = [att.id];
       } catch (err) {
         setUploading(false);
         setSending(false);
@@ -274,36 +349,25 @@ export default function ClientCreateTicket() {
       }
     }
 
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `user-${Date.now()}`,
+        chatId: activeChat.id,
+        sender: "user",
+        content: contentToSend,
+        aiAnswerType: "normal",
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+    streamingContentRef.current = "";
     setStreamingDraft({ id: "streaming", content: "" });
 
-    try {
-      await sendMessageStream(
-        { chatId: activeChat.id, content: contentToSend, attachmentIds },
-        {
-          onUserMessage: (msg) => {
-            setMessages((prev) => [...prev, msg]);
-          },
-          onToken: (chunk) => {
-            setStreamingDraft((prev) =>
-              prev ? { ...prev, content: prev.content + chunk } : prev,
-            );
-          },
-          onDone: ({ chat: updatedChat, aiMessage }) => {
-            setMessages((prev) => [...prev, aiMessage]);
-            setStreamingDraft(null);
-            if (updatedChat) setChat(updatedChat);
-          },
-          onError: (err) => {
-            setStreamingDraft(null);
-            showError(err, "AI failed to respond");
-          },
-        },
-      );
-    } catch (err) {
-      setStreamingDraft(null);
-      showError(err, "Could not send message");
-    } finally {
-      setSending(false);
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ content: contentToSend }));
+    } else {
+      pendingFirstMessage.current = contentToSend;
+      connectWS(activeChat.id);
     }
   }
 
@@ -349,6 +413,8 @@ export default function ClientCreateTicket() {
   }
 
   function handleNewChat() {
+    pendingFirstMessage.current = null;
+    streamingContentRef.current = "";
     if (chat && (chat.status === "active" || chat.status === "waiting_confirmation")) {
       markChatAsDraft(chat.id);
     }
@@ -359,6 +425,7 @@ export default function ClientCreateTicket() {
     setAttachedFile(null);
     setIsFirstMessage(true);
     if (resumeId) setSearchParams({}, { replace: true });
+    connectWS(null);
   }
 
   function handleShare() {

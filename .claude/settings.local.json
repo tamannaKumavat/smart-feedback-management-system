@@ -13,7 +13,8 @@
       "Bash(.venv/Scripts/python -c \"from config import DATABASE_URL; print\\(repr\\(DATABASE_URL\\)\\)\")",
       "Bash(.venv/Scripts/python init_db.py)",
       "Bash(.venv/Scripts/pip show *)",
-      "Bash(.venv/Scripts/pip install *)"
+      "Bash(.venv/Scripts/pip install *)",
+      "Bash(.venv\\\\Scripts\\\\pip show *)"
     ]
   }
 }
