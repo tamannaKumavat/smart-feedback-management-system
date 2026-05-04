@@ -24,6 +24,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    JSON,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -57,9 +58,11 @@ AI_ANSWER_SUMMARY = "summary"
 AI_ANSWER_TYPES = {AI_ANSWER_NORMAL, AI_ANSWER_SUMMARY}
 
 # Ticket states.
-TICKET_STATUS_OPEN = "open"
-TICKET_STATUS_CLOSED = "closed"
-TICKET_STATUSES = {TICKET_STATUS_OPEN, TICKET_STATUS_CLOSED}
+TICKET_STATUS_NEW = "New"
+TICKET_STATUS_IN_PROGRESS = "In Progress"
+TICKET_STATUS_RESOLVED = "Resolved"
+TICKET_STATUS_OPEN = "Open"
+TICKET_STATUSES = {TICKET_STATUS_NEW, TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_RESOLVED}
 
 
 class Chat(Base):
@@ -155,19 +158,30 @@ class Attachment(Base):
 class Ticket(Base):
     __tablename__ = "tickets"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
+    case_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     chat_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("chats.id", ondelete="CASCADE"), nullable=False, index=True
     )
     user_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
+
     summary: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[str] = mapped_column(
-        String(16), nullable=False, default=TICKET_STATUS_OPEN
-    )
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    issue_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    priority: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    team: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    assignee: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default=TICKET_STATUS_NEW)
+    labels: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    recommended_action: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     chat: Mapped[Chat] = relationship("Chat", back_populates="tickets")
+

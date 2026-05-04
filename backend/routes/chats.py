@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from db import SessionLocal, get_db
-from models.chat import AI_ANSWER_NORMAL, Chat, Message, Ticket, TICKET_STATUS_OPEN
+from models.chat import AI_ANSWER_NORMAL, Chat, Message, Ticket, TICKET_STATUS_NEW as TICKET_STATUS_OPEN
 from models.user import User
 from services import attachment_service, chat_service
 from services.chat_service import ChatError

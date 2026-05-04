@@ -41,15 +41,24 @@ def _message_dto(msg: Message) -> dict[str, Any]:
 
 def _ticket_dto(ticket: Ticket, messages: list[Message]) -> dict[str, Any]:
     return {
-        "id": ticket.id,
+        "caseId": ticket.case_id,
         "chatId": ticket.chat_id,
         "userId": ticket.user_id,
         "summary": ticket.summary,
+        "description": ticket.description,
+        "issueType": ticket.issue_type,
+        "priority": ticket.priority,
+        "team": ticket.team,
+        "assignee": ticket.assignee,
         "status": ticket.status,
+        "labels": ticket.labels or [],
+        "recommendedAction": ticket.recommended_action,
         "createdAt": ticket.created_at.isoformat() if ticket.created_at else None,
+        "updatedAt": ticket.updated_at.isoformat() if ticket.updated_at else None,
         "messages": [_message_dto(m) for m in messages],
         "messageCount": len(messages),
     }
+
 
 
 @router.get("/tickets")
