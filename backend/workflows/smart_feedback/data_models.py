@@ -10,8 +10,10 @@ from workflows.smart_feedback.constants import (
     AnalysisAgentSentiment,
     AnalysisAgentUrgency,
     AnalysisAgentIssueType,
+    Language,
 )
 from workflows.triage.data_models import IncidentAssessment, IncidentAssessmentJudge
+
 
 class EngagementDecision(BaseModel):
     """Structured output for the engagement agent's first-phase decision."""
@@ -51,23 +53,26 @@ class AnalysisAgentResult(BaseModel):
         description="Describes the specific issue type ",
         default=AnalysisAgentIssueType.GENERAL_ISSUE,
     )
+    language: Language = Field(
+        description="The language in which the user interacts.", default=Language.EN
+    )
 
 
 class SmartFeedbackState(TypedDict):
     user_query: str
-    prior_history: list            # [{sender, content}] from DB — conversation so far
+    prior_history: list  # [{sender, content}] from DB — conversation so far
     chat_history: Annotated[list, add_messages]
-    is_first_message: bool         # True only on the user's very first message in a session
-    needs_clarification: bool      # set by engagement Phase 1; routes to END when True
+    is_first_message: bool  # True only on the user's very first message in a session
+    needs_clarification: bool  # set by engagement Phase 1; routes to END when True
     human_assessment: str
     ticket_id: str
-    analysis_agent_result: AnalysisAgentResult   # None until analysis_agent runs
-    rag_results: list              # list of dicts from RAGAgent.search()
+    analysis_agent_result: AnalysisAgentResult  # None until analysis_agent runs
+    rag_results: list  # list of dicts from RAGAgent.search()
     rag_user_assessment: str
     rag_workflow_state: dict
     triage_workflow: dict
-    engagement_response: str       # last message sent back to the user
-    ready_to_create_ticket: bool   # True after Phase 2
-    ticket_summary: str            # set by create_ticket node; non-empty → auto-save ticket
+    engagement_response: str  # last message sent back to the user
+    ready_to_create_ticket: bool  # True after Phase 2
+    ticket_summary: str  # set by create_ticket node; non-empty → auto-save ticket
     incident_assessment: Annotated[List[IncidentAssessment], add]
     incident_assessment_judge: Annotated[List[IncidentAssessmentJudge], add]
