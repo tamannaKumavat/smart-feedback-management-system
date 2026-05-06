@@ -133,6 +133,7 @@ export default function ClientCreateTicket() {
   const wsRef = useRef(null);
   const pendingFirstMessage = useRef(null);
   const streamingContentRef = useRef("");
+  const closingRef = useRef(false);
 
   // Keep a ref so the unmount cleanup sees the latest chat without
   // re-running the effect on every chat change.
@@ -255,7 +256,10 @@ export default function ClientCreateTicket() {
   }
 
   function connectWS(chatId) {
-    if (wsRef.current) wsRef.current.close();
+    if (wsRef.current) {
+      closingRef.current = true;
+      wsRef.current.close();
+    }
     setSending(true);
     const token = getToken();
     const params = new URLSearchParams();
@@ -273,11 +277,15 @@ export default function ClientCreateTicket() {
       }
     };
     ws.onerror = () => {
-      showError("WebSocket connection error");
-      setSending(false);
-      setStreamingDraft(null);
+      if (!closingRef.current) {
+        showError("WebSocket connection error");
+        setSending(false);
+        setStreamingDraft(null);
+      }
+      closingRef.current = false;
     };
     ws.onclose = () => {
+      closingRef.current = false;
       wsRef.current = null;
     };
   }

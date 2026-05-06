@@ -20,7 +20,7 @@ from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
 from config import ALLOWED_UPLOAD_MIME_PREFIXES, MAX_UPLOAD_BYTES, UPLOAD_DIR
-from models.chat import Attachment, Chat, Message
+from models.chat import Attachment, Issue, Message
 
 
 class AttachmentError(Exception):
@@ -53,11 +53,11 @@ def absolute_path(attachment: Attachment) -> Path:
 
 
 def save_upload(
-    db: Session, *, chat: Chat, user_id: str, upload: UploadFile
+    db: Session, *, chat: Issue, user_id: str, upload: UploadFile
 ) -> Attachment:
     """Persist an uploaded file to disk and create the DB row.
 
-    The caller has already enforced chat ownership.
+    The caller has already enforced issue ownership.
     """
     if not _allowed_mime(upload.content_type):
         raise AttachmentError(
@@ -67,7 +67,7 @@ def save_upload(
     safe_name = _safe_filename(upload.filename or "file")
 
     attachment = Attachment(
-        chat_id=chat.id,
+        issue_id=chat.id,
         user_id=user_id,
         filename=upload.filename or safe_name,
         mime_type=upload.content_type or "application/octet-stream",
@@ -124,7 +124,7 @@ def link_attachments_to_message(
         att = db.get(Attachment, aid)
         if att is None:
             continue
-        if att.user_id != user_id or att.chat_id != message.chat_id:
+        if att.user_id != user_id or att.issue_id != message.issue_id:
             continue
         if att.message_id and att.message_id != message.id:
             continue

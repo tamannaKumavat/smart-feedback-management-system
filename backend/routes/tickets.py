@@ -30,7 +30,7 @@ def _message_dto(msg: Message) -> dict[str, Any]:
         )
     return {
         "id": msg.id,
-        "chatId": msg.chat_id,
+        "issueId": msg.issue_id,
         "sender": msg.sender,
         "content": msg.content,
         "aiAnswerType": msg.ai_answer_type,
@@ -42,7 +42,7 @@ def _message_dto(msg: Message) -> dict[str, Any]:
 def _ticket_dto(ticket: Ticket, messages: list[Message]) -> dict[str, Any]:
     return {
         "caseId": ticket.case_id,
-        "chatId": ticket.chat_id,
+        "issueId": ticket.issue_id,
         "userId": ticket.user_id,
         "summary": ticket.summary,
         "description": ticket.description,
@@ -60,7 +60,6 @@ def _ticket_dto(ticket: Ticket, messages: list[Message]) -> dict[str, Any]:
     }
 
 
-
 @router.get("/tickets")
 def list_my_tickets(
     db: Session = Depends(get_db),
@@ -69,7 +68,7 @@ def list_my_tickets(
     tickets = ticket_service.list_user_tickets(db, current_user.id)
     out = []
     for t in tickets:
-        msgs = ticket_service.messages_for_chat(db, t.chat_id)
+        msgs = ticket_service.messages_for_issue(db, t.issue_id)
         out.append(_ticket_dto(t, msgs))
     return {"ok": True, "tickets": out}
 
@@ -83,5 +82,5 @@ def get_my_ticket(
     ticket = ticket_service.get_user_ticket(db, ticket_id, current_user.id)
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found")
-    msgs = ticket_service.messages_for_chat(db, ticket.chat_id)
+    msgs = ticket_service.messages_for_issue(db, ticket.issue_id)
     return {"ok": True, "ticket": _ticket_dto(ticket, msgs)}

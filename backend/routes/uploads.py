@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api", tags=["uploads"])
 def _attachment_dto(att) -> dict:
     return {
         "id": att.id,
-        "chatId": att.chat_id,
+        "issueId": att.issue_id,
         "messageId": att.message_id,
         "filename": att.filename,
         "mimeType": att.mime_type,
@@ -55,7 +55,7 @@ def upload_attachment(
         raise HTTPException(status_code=e.http_status, detail=str(e)) from e
 
     if chat.status == "closed":
-        raise HTTPException(status_code=409, detail="Chat is closed")
+        raise HTTPException(status_code=409, detail="Issue is closed")
 
     try:
         att = attachment_service.save_upload(

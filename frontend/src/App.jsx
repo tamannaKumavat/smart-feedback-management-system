@@ -5,7 +5,6 @@ import SignUp from "./pages/auth/SignUp.jsx";
 import ForgotPassword from "./pages/auth/ForgotPassword.jsx";
 import ClientDashboard from "./pages/client/ClientDashboard.jsx";
 import ClientCreateTicket from "./pages/client/ClientCreateTicket.jsx";
-import ClientCreateTicketWS from "./pages/client/ClientCreateTicketWS.jsx";
 
 import ClientDrafts from "./pages/client/ClientDrafts.jsx";
 import ClientTicketHistory from "./pages/client/ClientTicketHistory.jsx";
@@ -83,16 +82,6 @@ export default function App() {
             user={user}
             allowedRole="client"
             element={<ClientCreateTicket />}
-          />
-        }
-      />
-        <Route
-        path="/client/create-ticket-ws"
-        element={
-          <RoleRoute
-            user={user}
-            allowedRole="client"
-            element={<ClientCreateTicketWS />}
           />
         }
       />

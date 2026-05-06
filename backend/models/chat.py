@@ -1,11 +1,12 @@
-"""SQLAlchemy models for the chat ticketing system.
+"""SQLAlchemy models for the smart feedback system.
 
 Three entities:
 
-- Chat: a conversation owned by a user, with a lifecycle status.
-- Message: an utterance in a chat, from either the user or the AI.
-- Ticket: a structured record materialised from a chat once the user
-  confirms an AI-produced summary.
+- Issue: a conversation/session owned by a user, with a lifecycle status
+  and a summary of what the issue was about.
+- Message: an utterance in an issue session, from either the user or the AI.
+- Ticket: a structured escalation record created only when the triage agent
+  completes with a confirmed outcome.
 
 IDs are stored as 36-character UUID strings to keep the schema portable
 and to match the existing string-based ``users.id`` foreign key style.
@@ -35,17 +36,21 @@ def _new_uuid() -> str:
     return str(uuid4())
 
 
-# Chat lifecycle states.
-CHAT_STATUS_ACTIVE = "active"
-CHAT_STATUS_WAITING_CONFIRMATION = "waiting_confirmation"
-CHAT_STATUS_DRAFT = "draft"
-CHAT_STATUS_CLOSED = "closed"
-CHAT_STATUSES = {
-    CHAT_STATUS_ACTIVE,
-    CHAT_STATUS_WAITING_CONFIRMATION,
-    CHAT_STATUS_DRAFT,
-    CHAT_STATUS_CLOSED,
+# Issue lifecycle states.
+ISSUE_STATUS_ACTIVE = "active"
+ISSUE_STATUS_WAITING_CONFIRMATION = "waiting_confirmation"
+ISSUE_STATUS_DRAFT = "draft"
+ISSUE_STATUS_CLOSED = "closed"
+ISSUE_STATUSES = {
+    ISSUE_STATUS_ACTIVE,
+    ISSUE_STATUS_WAITING_CONFIRMATION,
+    ISSUE_STATUS_DRAFT,
+    ISSUE_STATUS_CLOSED,
 }
+
+# How the issue was resolved.
+RESOLVED_BY_RAG = "rag"
+RESOLVED_BY_TRIAGE = "triage"
 
 # Message senders.
 SENDER_USER = "user"
@@ -65,15 +70,19 @@ TICKET_STATUS_OPEN = "Open"
 TICKET_STATUSES = {TICKET_STATUS_NEW, TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_RESOLVED}
 
 
-class Chat(Base):
-    __tablename__ = "chats"
+class Issue(Base):
+    __tablename__ = "issues"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     user_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(
-        String(32), nullable=False, default=CHAT_STATUS_ACTIVE
+        String(32), nullable=False, default=ISSUE_STATUS_ACTIVE
+    )
+    resolved_by: Mapped[str | None] = mapped_column(
+        String(16), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -87,23 +96,23 @@ class Chat(Base):
 
     messages: Mapped[list["Message"]] = relationship(
         "Message",
-        back_populates="chat",
+        back_populates="issue",
         cascade="all, delete-orphan",
         order_by="Message.created_at",
     )
     tickets: Mapped[list["Ticket"]] = relationship(
-        "Ticket", back_populates="chat", cascade="all, delete-orphan"
+        "Ticket", back_populates="issue", cascade="all, delete-orphan"
     )
 
-    __table_args__ = (Index("ix_chats_user_status", "user_id", "status"),)
+    __table_args__ = (Index("ix_issues_user_status", "user_id", "status"),)
 
 
 class Message(Base):
     __tablename__ = "messages"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
-    chat_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("chats.id", ondelete="CASCADE"), nullable=False, index=True
+    issue_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("issues.id", ondelete="CASCADE"), nullable=False, index=True
     )
     sender: Mapped[str] = mapped_column(String(16), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -115,7 +124,7 @@ class Message(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    chat: Mapped[Chat] = relationship("Chat", back_populates="messages")
+    issue: Mapped[Issue] = relationship("Issue", back_populates="messages")
     attachments: Mapped[list["Attachment"]] = relationship(
         "Attachment",
         back_populates="message",
@@ -128,8 +137,8 @@ class Attachment(Base):
     __tablename__ = "attachments"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
-    chat_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("chats.id", ondelete="CASCADE"), nullable=False, index=True
+    issue_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("issues.id", ondelete="CASCADE"), nullable=False, index=True
     )
     # Nullable: an upload can exist briefly before the message that
     # references it is persisted (the route uploads first, then sends).
@@ -159,8 +168,8 @@ class Ticket(Base):
     __tablename__ = "tickets"
 
     case_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
-    chat_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("chats.id", ondelete="CASCADE"), nullable=False, index=True
+    issue_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("issues.id", ondelete="CASCADE"), nullable=False, index=True
     )
     user_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
@@ -183,5 +192,5 @@ class Ticket(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    chat: Mapped[Chat] = relationship("Chat", back_populates="tickets")
+    issue: Mapped[Issue] = relationship("Issue", back_populates="tickets")
 

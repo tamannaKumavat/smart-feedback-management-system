@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from models.chat import Chat, Message, Ticket
+from models.chat import Issue, Message, Ticket
 
 
 def list_user_tickets(db: Session, user_id: str) -> list[Ticket]:
@@ -24,14 +24,14 @@ def get_user_ticket(db: Session, ticket_id: str, user_id: str) -> Ticket | None:
     return ticket
 
 
-def messages_for_chat(db: Session, chat_id: str) -> list[Message]:
+def messages_for_issue(db: Session, issue_id: str) -> list[Message]:
     stmt = (
         select(Message)
-        .where(Message.chat_id == chat_id)
+        .where(Message.issue_id == issue_id)
         .order_by(Message.created_at, Message.id)
     )
     return list(db.execute(stmt).scalars())
 
 
-def chat_for_ticket(db: Session, ticket: Ticket) -> Chat | None:
-    return db.get(Chat, ticket.chat_id)
+def issue_for_ticket(db: Session, ticket: Ticket) -> Issue | None:
+    return db.get(Issue, ticket.issue_id)
