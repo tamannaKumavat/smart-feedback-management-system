@@ -131,8 +131,11 @@ async def websocket_endpoint(
 
         # Inject first message into initial state so the workflow uses it directly
         initial_state["user_query"] = user_content
-
-        config = {"configurable": {"thread_id": str(uuid.uuid4())}}
+        if (chat_id):
+            new_thread_id = chat_id
+        else:
+            new_thread_id = str(uuid.uuid4())
+        config = {"configurable": {"thread_id": new_thread_id}}
         should_run = True
         user_input = None
 
@@ -146,8 +149,8 @@ async def websocket_endpoint(
                 async for chunk in workflow.workflow.astream(
                     graph_input,
                     config=config,
-                    stream_mode="updates",
-                ):
+                    stream_mode="updates"
+                    ):
                     if "__interrupt__" in chunk:
                         # Always take the last value — LangGraph replays the previous
                         # interrupt on resume, so earlier values get overwritten.
