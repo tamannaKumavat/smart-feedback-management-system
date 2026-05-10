@@ -161,6 +161,7 @@ class SmartFeedbackWorkflow:
         workflow.add_node("analysis_agent", self.analysis_agent)
         workflow.add_node("rag_search_workflow", self.rag_search_workflow)
         workflow.add_node("rag_result_user_assessment", self.rag_result_user_assessment)
+        workflow.add_node("add_ticket_to_jira", self.add_ticket_to_jira)
 
         # Add edges
         workflow.add_edge(START, "engagement_with_user")
@@ -240,7 +241,8 @@ class SmartFeedbackWorkflow:
         )
         workflow.add_edge("add_additional_information_to_ticket", "update_ticket")
         workflow.add_edge("update_ticket", "generate_ticket_created_response")
-        workflow.add_edge("generate_ticket_created_response", "end_node")
+        workflow.add_edge("generate_ticket_created_response", "add_ticket_to_jira")
+        workflow.add_edge("add_ticket_to_jira", "end_node")
         workflow.add_edge("end_node", END)
 
         self._workflow = workflow.compile(checkpointer=self.checkpointer)
@@ -253,9 +255,6 @@ class SmartFeedbackWorkflow:
         if state.get("analysis_agent_result") is None:
             return "clarify" if state.get("needs_clarification", False) else "proceed"
         # If we reach here, it's Phase 2 (RAG results are available)
-        print(
-            f"user assessment: {state.get('rag_results', []) and state.get('engagement_response', '')}, Engagement response: {state.get('engagement_response', '')}"
-        )
         if state.get("rag_results", []) and state.get("engagement_response", ""):
             return "rag_user_assessment"
 
@@ -401,10 +400,10 @@ class SmartFeedbackWorkflow:
     def add_additional_information_to_ticket(self, state: SmartFeedbackState) -> str:
         user_comment = interrupt("Please add you comment to the ticket")
         final_ticket_content = (
-            state.get("ticket_content") + f"\nUSER COMMENT:\n{user_comment}"
+            state.get("ticket_summary") + f"\nUSER COMMENT:\n{user_comment}"
         )
         return {
-            "ticket_content": final_ticket_content,
+            "ticket_summary": final_ticket_content,
             "chat_history": HumanMessage(user_comment),
         }
 
@@ -491,8 +490,8 @@ class SmartFeedbackWorkflow:
             }
         )
         return {
-            "ticket_content": ticket_content.content,
-            "chat_history": ticket_content,
+            "ticket_summary": ticket_content.content,
+            "chat_history": [ticket_content],
         }
 
     def update_ticket(self, state: SmartFeedbackState) -> SmartFeedbackState:
@@ -506,6 +505,10 @@ class SmartFeedbackWorkflow:
         return {
             "final_user_response": f"Ticket with id {state.get('ticket_id')} was successfully created!"
         }
+
+    def add_ticket_to_jira(self, state: SmartFeedbackState):
+        # TODO: add logic to add ticket to jira board
+        pass
 
     def end_node(self, state: SmartFeedbackState):
         return state

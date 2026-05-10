@@ -13,3 +13,8 @@ class HumanAssessment(str, Enum):
     OK: str = "Ok"
     ADD_ADDITIONAL_CONTENT: str = "additional_content"
     REDO_TICKET: str = "redo_ticket"
+
+class AvailableTeams(str, Enum):
+    SUPPORT: str = "support"
+    SOFTWARE_DEVELOPMENT: str = "software_development"
+    SECURITY: str = "security"

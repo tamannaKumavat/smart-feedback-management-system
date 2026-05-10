@@ -1,19 +1,37 @@
 from __future__ import annotations
 
 import json
+import os
 import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.types import Command
 
+from config import DATABASE_URL, MOCK_MODE
 from db import SessionLocal
 from models.chat import AI_ANSWER_NORMAL, TICKET_STATUS_NEW, Ticket
 from services import attachment_service, chat_service
 from services.security import _resolve_user
 from workflows.smart_feedback.workflow import build_workflow
 
+os.environ["LANGGRAPH_STRICT_MSGPACK"] = "true"
+
 router = APIRouter(prefix="/ws", tags=["chat"])
+
+
+@asynccontextmanager
+async def _get_checkpointer():
+    """Yields MemorySaver in mock mode, AsyncPostgresSaver in production."""
+    if MOCK_MODE:
+        yield MemorySaver()
+    else:
+        async with AsyncPostgresSaver.from_conn_string(
+            DATABASE_URL.replace("+psycopg", "")
+        ) as cp:
+            yield cp
 
 
 def _message_dto(msg) -> dict:
@@ -82,7 +100,6 @@ async def websocket_endpoint(
             "triage_workflow": {},
             "engagement_response": "",
             "ready_to_create_ticket": False,
-            "ticket_summary": "",
             "ticket_content": "",
             "final_user_response": "",
         }
@@ -115,96 +132,97 @@ async def websocket_endpoint(
         # Inject first message into initial state so the workflow uses it directly
         initial_state["user_query"] = user_content
 
-        checkpointer = MemorySaver()
         config = {"configurable": {"thread_id": str(uuid.uuid4())}}
-        workflow = build_workflow(checkpointer=checkpointer, graph_config=config)
         should_run = True
         user_input = None
 
-        while should_run:
-            graph_input = user_input if user_input else initial_state
-            interrupt_value = None
+        async with _get_checkpointer() as checkpointer:
+            workflow = build_workflow(checkpointer=checkpointer, graph_config=config)
 
-            async for chunk in workflow.workflow.astream(
-                graph_input,
-                config=config,
-                stream_mode="updates",
-            ):
-                if "__interrupt__" in chunk:
-                    # Always take the last value — LangGraph replays the previous
-                    # interrupt on resume, so earlier values get overwritten.
-                    interrupt_value = chunk["__interrupt__"][-1].value
-                elif "end_node" in chunk:
-                    end_state = chunk["end_node"]
-                    content = (
-                        end_state.get("final_user_response")
-                        or end_state.get("engagement_response")
-                        or ""
-                    )
-                    if content:
-                        ai_msg = chat_service.record_ai_message(
-                            db, issue, content, AI_ANSWER_NORMAL
+            while should_run:
+                graph_input = user_input if user_input else initial_state
+                interrupt_value = None
+
+                async for chunk in workflow.workflow.astream(
+                    graph_input,
+                    config=config,
+                    stream_mode="updates",
+                ):
+                    if "__interrupt__" in chunk:
+                        # Always take the last value — LangGraph replays the previous
+                        # interrupt on resume, so earlier values get overwritten.
+                        interrupt_value = chunk["__interrupt__"][-1].value
+                    elif "end_node" in chunk:
+                        end_state = chunk["end_node"]
+                        content = (
+                            end_state.get("final_user_response")
+                            or end_state.get("engagement_response")
+                            or ""
                         )
-                        await websocket.send_text(json.dumps({
-                            "type": "message",
-                            "message": _message_dto(ai_msg),
-                        }))
-
-                    # Create ticket in DB if the triage path ran
-                    ticket_content = end_state.get("ticket_content", "")
-                    if ticket_content:
-                        ticket = Ticket(
-                            issue_id=issue.id,
-                            user_id=user.id,
-                            summary=ticket_content,
-                            status=TICKET_STATUS_NEW,
-                        )
-                        db.add(ticket)
-                        db.commit()
-
-                    should_run = False
-
-            # Handle interrupt AFTER the stream ends — never block inside the loop.
-            if interrupt_value is not None and should_run:
-                ai_msg = chat_service.record_ai_message(
-                    db, issue, str(interrupt_value), AI_ANSWER_NORMAL
-                )
-                await websocket.send_text(json.dumps({
-                    "type": "message",
-                    "message": _message_dto(ai_msg),
-                }))
-                await websocket.send_text(json.dumps({
-                    "type": "interrupt",
-                    "message": "Waiting for user input...",
-                }))
-
-                raw = await websocket.receive_text()
-                msg = json.loads(raw)
-                user_content = msg.get("content", "")
-                attachment_ids = msg.get("attachmentIds", [])
-
-                # Save user message to DB
-                if user_content:
-                    try:
-                        user_msg = chat_service.record_user_message(
-                            db, issue, user_content
-                        )
-                        if attachment_ids:
-                            attachment_service.link_attachments_to_message(
-                                db,
-                                message=user_msg,
-                                attachment_ids=attachment_ids,
-                                user_id=user.id,
+                        if content:
+                            ai_msg = chat_service.record_ai_message(
+                                db, issue, content, AI_ANSWER_NORMAL
                             )
-                            db.refresh(user_msg)
-                        await websocket.send_text(json.dumps({
-                            "type": "user_message_saved",
-                            "message": _message_dto(user_msg),
-                        }))
-                    except Exception as exc:
-                        print(f"[ws] DB write failed: {exc}")
+                            await websocket.send_text(json.dumps({
+                                "type": "message",
+                                "message": _message_dto(ai_msg),
+                            }))
 
-                user_input = Command(resume=user_content)
+                        # Create ticket in DB if the triage path ran
+                        ticket_content = end_state.get("ticket_content", "")
+                        if ticket_content:
+                            ticket = Ticket(
+                                issue_id=issue.id,
+                                user_id=user.id,
+                                summary=ticket_content,
+                                status=TICKET_STATUS_NEW,
+                            )
+                            db.add(ticket)
+                            db.commit()
+
+                        should_run = False
+
+                # Handle interrupt AFTER the stream ends — never block inside the loop.
+                if interrupt_value is not None and should_run:
+                    ai_msg = chat_service.record_ai_message(
+                        db, issue, str(interrupt_value), AI_ANSWER_NORMAL
+                    )
+                    await websocket.send_text(json.dumps({
+                        "type": "message",
+                        "message": _message_dto(ai_msg),
+                    }))
+                    await websocket.send_text(json.dumps({
+                        "type": "interrupt",
+                        "message": "Waiting for user input...",
+                    }))
+
+                    raw = await websocket.receive_text()
+                    msg = json.loads(raw)
+                    user_content = msg.get("content", "")
+                    attachment_ids = msg.get("attachmentIds", [])
+
+                    # Save user message to DB
+                    if user_content:
+                        try:
+                            user_msg = chat_service.record_user_message(
+                                db, issue, user_content
+                            )
+                            if attachment_ids:
+                                attachment_service.link_attachments_to_message(
+                                    db,
+                                    message=user_msg,
+                                    attachment_ids=attachment_ids,
+                                    user_id=user.id,
+                                )
+                                db.refresh(user_msg)
+                            await websocket.send_text(json.dumps({
+                                "type": "user_message_saved",
+                                "message": _message_dto(user_msg),
+                            }))
+                        except Exception as exc:
+                            print(f"[ws] DB write failed: {exc}")
+
+                    user_input = Command(resume=user_content)
 
         await websocket.close()
 
