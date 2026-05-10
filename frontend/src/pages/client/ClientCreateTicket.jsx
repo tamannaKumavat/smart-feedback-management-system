@@ -110,6 +110,8 @@ function Avatar({ src, label }) {
   );
 }
 
+const GREETING_MSG = { id: "ai-greeting", sender: "ai", content: "How can I help you with today?", aiAnswerType: "normal", createdAt: new Date().toISOString() };
+
 export default function ClientCreateTicket() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -179,7 +181,6 @@ export default function ClientCreateTicket() {
   // For fresh chats, also open the WS immediately so the backend greeting
   // arrives before the user types their first message.
   useEffect(() => {
-    if (!resumeId) connectWS(null);
     return () => {
       if (wsRef.current) {
         wsRef.current.close();
@@ -198,6 +199,8 @@ export default function ClientCreateTicket() {
     const el = scrollRef.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages, streamingDraft]);
+
+  const displayMessages = resumeId ? messages : [GREETING_MSG, ...messages];
 
   const latestSummaryId = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -239,14 +242,7 @@ export default function ClientCreateTicket() {
           },
         ]);
       }
-      if (pendingFirstMessage.current) {
-        const msg = pendingFirstMessage.current;
-        pendingFirstMessage.current = null;
-        wsRef.current?.send(JSON.stringify({ content: msg }));
-        setStreamingDraft({ id: "streaming", content: "" });
-      } else {
-        setSending(false);
-      }
+      setSending(false);
     } else if (data.type === "message") {
       setMessages((prev) => [...prev, data.message]);
       streamingContentRef.current = "";
@@ -260,7 +256,7 @@ export default function ClientCreateTicket() {
       closingRef.current = true;
       wsRef.current.close();
     }
-    setSending(true);
+    if (pendingFirstMessage.current) setSending(true);
     const token = getToken();
     const params = new URLSearchParams();
     if (token) params.set("token", token);
@@ -269,6 +265,15 @@ export default function ClientCreateTicket() {
       `ws://${window.location.hostname}:8000/ws/chat?${params}`,
     );
     wsRef.current = ws;
+    ws.onopen = () => {
+      // Send the pending first message as soon as the connection is ready.
+      // The backend waits for this before starting the workflow.
+      if (pendingFirstMessage.current) {
+        const msg = pendingFirstMessage.current;
+        pendingFirstMessage.current = null;
+        ws.send(msg);
+      }
+    };
     ws.onmessage = (e) => {
       try {
         handleWsMessage(JSON.parse(e.data));
@@ -339,13 +344,15 @@ export default function ClientCreateTicket() {
       return;
     }
 
+    let attachmentId = null;
     if (fileToSend) {
       setUploading(true);
       try {
-        await uploadAttachment({
+        const att = await uploadAttachment({
           chatId: activeChat.id,
           file: fileToSend,
         });
+        attachmentId = att?.id ?? null;
       } catch (err) {
         setUploading(false);
         setSending(false);
@@ -371,10 +378,15 @@ export default function ClientCreateTicket() {
     streamingContentRef.current = "";
     setStreamingDraft({ id: "streaming", content: "" });
 
+    const wsPayload = JSON.stringify({
+      content: contentToSend,
+      attachmentIds: attachmentId ? [attachmentId] : [],
+    });
+
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ content: contentToSend }));
+      wsRef.current.send(wsPayload);
     } else {
-      pendingFirstMessage.current = contentToSend;
+      pendingFirstMessage.current = wsPayload;
       connectWS(activeChat.id);
     }
   }
@@ -612,7 +624,7 @@ export default function ClientCreateTicket() {
           className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#F5F7FA] to-white p-4 ${scrollPretty}`}
         >
           <div className="mx-auto max-w-[920px] space-y-5">
-            {messages.length === 0 && !streamingDraft ? (
+            {displayMessages.length === 0 && !streamingDraft ? (
               <div className="mt-12 text-center text-slate-500">
                 <p className="text-[14px]">
                   Start by describing the problem you’re facing. The assistant
@@ -624,7 +636,7 @@ export default function ClientCreateTicket() {
                 </p>
               </div>
             ) : null}
-            {messages.map(renderMessage)}
+            {displayMessages.map(renderMessage)}
             {renderStreaming()}
           </div>
         </div>

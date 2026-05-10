@@ -2,24 +2,19 @@
 
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
-from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from db import SessionLocal, get_db
-from models.chat import AI_ANSWER_NORMAL, Issue, Message, Ticket
+from db import get_db
+from models.chat import Issue, Message, Ticket
 from models.user import User
-from services import attachment_service, chat_service
+from services import chat_service
 from services.chat_service import ChatError
 from services.security import get_current_user
-from workflows.smart_feedback.workflow import build_workflow
 
 router = APIRouter(prefix="/api", tags=["chats"])
 log = logging.getLogger(__name__)
@@ -28,14 +23,6 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Request / response schemas
 # ---------------------------------------------------------------------------
-
-
-class SendMessageBody(BaseModel):
-    chat_id: str = Field(..., alias="chatId")
-    content: str = Field(..., min_length=1)
-    stream: bool = True
-    attachment_ids: list[str] = Field(default_factory=list, alias="attachmentIds")
-    model_config = {"populate_by_name": True}
 
 
 class ConfirmBody(BaseModel):
@@ -124,113 +111,6 @@ def get_chat_messages(
         "issue": _issue_dto(issue),
         "messages": [_message_dto(m) for m in messages],
     }
-
-
-@router.post("/messages")
-async def send_message(
-    body: SendMessageBody,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    try:
-        issue = chat_service.get_chat_for_user(db, body.chat_id, current_user.id)
-        user_msg = chat_service.record_user_message(db, issue, body.content.strip())
-        if body.attachment_ids:
-            attachment_service.link_attachments_to_message(
-                db,
-                message=user_msg,
-                attachment_ids=body.attachment_ids,
-                user_id=current_user.id,
-            )
-            db.refresh(user_msg)
-        history = chat_service.list_messages(db, issue.id, current_user.id)
-    except ChatError as e:
-        raise _from_chat_error(e) from e
-
-    prior_msgs = [
-        {"sender": m.sender, "content": m.content}
-        for m in history if m.id != user_msg.id
-    ]
-
-    if not body.stream:
-        try:
-            result = await asyncio.to_thread(
-                build_workflow().run, body.content, prior_msgs
-            )
-        except Exception as exc:
-            log.exception("Workflow failed")
-            raise HTTPException(status_code=500, detail="AI workflow failed") from exc
-        response_text = result.get("engagement_response") or "Thank you, we'll look into this."
-        ai_msg = chat_service.record_ai_message(db, issue, response_text, AI_ANSWER_NORMAL)
-        db.refresh(issue)
-        return {
-            "ok": True,
-            "chat": _issue_dto(issue),
-            "userMessage": _message_dto(user_msg),
-            "aiMessage": _message_dto(ai_msg),
-        }
-
-    return StreamingResponse(
-        _stream_ai_reply(
-            issue_id=issue.id,
-            user_id=current_user.id,
-            user_msg_dto=_message_dto(user_msg),
-            user_message=body.content,
-            prior_msgs=prior_msgs,
-        ),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-    )
-
-
-def _sse(event: dict[str, Any]) -> str:
-    return f"data: {json.dumps(event)}\n\n"
-
-
-async def _stream_ai_reply(
-    issue_id: str,
-    user_id: str,
-    user_msg_dto: dict[str, Any],
-    user_message: str,
-    prior_msgs: list[dict],
-) -> AsyncIterator[bytes]:
-    yield _sse({"type": "user_message", "message": user_msg_dto}).encode("utf-8")
-
-    response_text = "Thank you, we'll look into this."
-
-    try:
-        result = await asyncio.to_thread(
-            build_workflow().run, user_message, prior_msgs
-        )
-        response_text = result.get("engagement_response") or response_text
-    except Exception as exc:
-        log.exception("Workflow streaming failed")
-        yield _sse({"type": "error", "message": str(exc)}).encode("utf-8")
-        response_text = "I'm sorry, I wasn't able to process your request right now. Please try again in a moment."
-
-    chunk_size = 24
-    for i in range(0, len(response_text), chunk_size):
-        yield _sse({"type": "token", "content": response_text[i: i + chunk_size]}).encode("utf-8")
-        await asyncio.sleep(0.02)
-
-    db = SessionLocal()
-    try:
-        issue = chat_service.get_chat_for_user(db, issue_id, user_id)
-        ai_msg = chat_service.record_ai_message(db, issue, response_text, AI_ANSWER_NORMAL)
-        payload = {
-            "type": "done",
-            "chat": _issue_dto(issue),
-            "aiMessage": _message_dto(ai_msg),
-        }
-    except ChatError as e:
-        payload = {"type": "error", "message": str(e)}
-    finally:
-        db.close()
-
-    yield _sse(payload).encode("utf-8")
 
 
 @router.post("/confirm")

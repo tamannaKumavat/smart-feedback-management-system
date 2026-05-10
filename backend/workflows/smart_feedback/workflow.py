@@ -283,23 +283,30 @@ class SmartFeedbackWorkflow:
         return "respond" if rag_sufficient else "triage"
 
     def rag_result_user_assessment(self, state: SmartFeedbackState):
-        response = interrupt(
-            "Please state if this answers you question. Either yes or no"
+        rag_answer = state.get("engagement_response", "")
+        prompt = (
+            f"{rag_answer}\n\nDoes this answer your question? (yes / no)"
+            if rag_answer
+            else "Please state if this answers your question. Either yes or no."
         )
+        response = interrupt(prompt)
+
         updated_state = {}
         if response.lower() not in ["yes", "no"]:
             response = "no"
-        if response.lower() == "no":
+        if response.lower() == "yes":
+            updated_state["final_user_response"] = (
+                "I'm glad that answered your question! "
+                "Feel free to start a new chat if you need anything else."
+            )
+        else:
             updated_state["rag_results"] = []
             updated_state["analysis_agent_result"] = None
         updated_state["rag_user_assessment"] = response.lower()
-
         return updated_state
 
     def _route_rag_user_assessment(self, state: SmartFeedbackState):
-        if state.get("rag_user_assessment", "no"):
-            return "no"
-        return "end"
+        return "yes" if state.get("rag_user_assessment") == "yes" else "no"
 
     def engagement_with_user(self, state: SmartFeedbackState) -> dict:
         if state.get("analysis_agent_result") is not None:
@@ -324,17 +331,16 @@ class SmartFeedbackWorkflow:
             }
 
         if state.get("is_first_message", True):
-            answer = interrupt("How can I help you with today?")
-            state["user_query"] = answer
+            # First message is pre-populated by the WS handler before workflow starts.
+            # No interrupt needed — the greeting is shown statically on the frontend.
+            answer = state["user_query"]
             chain = (
                 chat_template_engagement_entry
                 | self.chat_model.with_structured_output(EngagementDecision)
             )
-            decision: EngagementDecision = chain.invoke(
-                {"user_query": state["user_query"]}
-            )
+            decision: EngagementDecision = chain.invoke({"user_query": answer})
         else:
-            answer = interrupt("Please clarify request.")
+            answer = interrupt("Please clarify your request.")
             state["user_query"] = answer
             chain = (
                 chat_template_engagement_followup
@@ -342,7 +348,7 @@ class SmartFeedbackWorkflow:
             )
             decision: EngagementDecision = chain.invoke(
                 {
-                    "user_query": state["user_query"],
+                    "user_query": answer,
                     "conversation_history": state["chat_history"],
                 }
             )
@@ -352,7 +358,7 @@ class SmartFeedbackWorkflow:
             "needs_clarification": decision.needs_clarification,
             "engagement_response": decision.response,
             "chat_history": [
-                HumanMessage(content=state["user_query"]),
+                HumanMessage(content=answer),
                 AIMessage(content=decision.response),
             ],
             "is_first_message": False,

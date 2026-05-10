@@ -66,8 +66,10 @@ class SmartFeedbackState(TypedDict):
     rag_user_assessment: str
     rag_workflow_state: dict
     triage_workflow: dict
-    engagement_response: str       # last message sent back to the user
+    engagement_response: str       # RAG answer composed by Phase 2 engagement_with_user
+    final_user_response: str       # closing message sent at end_node (triage or RAG confirmed)
     ready_to_create_ticket: bool   # True after Phase 2
-    ticket_summary: str            # set by create_ticket node; non-empty → auto-save ticket
+    ticket_summary: str            # plain-text summary built by create_ticket
+    ticket_content: str            # structured ticket body built by formulate_ticket_content
     incident_assessment: Annotated[List[IncidentAssessment], add]
     incident_assessment_judge: Annotated[List[IncidentAssessmentJudge], add]
