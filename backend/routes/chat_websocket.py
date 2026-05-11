@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+#from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.types import Command
 
 from config import DATABASE_URL, MOCK_MODE
@@ -16,6 +16,10 @@ from models.chat import AI_ANSWER_NORMAL, TICKET_STATUS_NEW, Ticket
 from services import attachment_service, chat_service
 from services.security import _resolve_user
 from workflows.smart_feedback.workflow import build_workflow
+from langchain_ollama import ChatOllama
+
+
+chat_model = ChatOllama(model="hf.co/unsloth/granite-4.0-h-tiny-GGUF:Q8_0")
 
 os.environ["LANGGRAPH_STRICT_MSGPACK"] = "true"
 
@@ -25,14 +29,15 @@ router = APIRouter(prefix="/ws", tags=["chat"])
 @asynccontextmanager
 async def _get_checkpointer():
     """Yields MemorySaver in mock mode, AsyncPostgresSaver in production."""
-    if MOCK_MODE:
-        yield MemorySaver()
+    
+    yield MemorySaver()
+    """
     else:
         async with AsyncPostgresSaver.from_conn_string(
             DATABASE_URL.replace("+psycopg", "")
         ) as cp:
             yield cp
-
+    """
 
 def _message_dto(msg) -> dict:
     attachments = [
@@ -65,29 +70,29 @@ async def websocket_endpoint(
     db = SessionLocal()
     try:
         # Authenticate
-        try:
-            user = _resolve_user(token, db)
-        except Exception:
-            await websocket.close(code=4001)
-            return
+        #try:
+        #    user = _resolve_user(token, db)
+        #except Exception:
+        #    await websocket.close(code=4001)
+        #    return
 
         # Load or create Issue
-        try:
-            if chat_id:
-                issue = chat_service.get_chat_for_user(db, chat_id, user.id)
-            else:
-                issue = chat_service.create_chat(db, user.id)
-        except Exception:
-            await websocket.close(code=4003)
-            return
+        #try:
+        #    if chat_id:
+        #        issue = chat_service.get_chat_for_user(db, chat_id, user.id)
+        #    else:
+        #        issue = chat_service.create_chat(db, user.id)
+        #except Exception:
+        #    await websocket.close(code=4003)
+        #    return
 
         # Build prior history for the workflow
-        history = chat_service.list_messages(db, issue.id, user.id)
-        prior_msgs = [{"sender": m.sender, "content": m.content} for m in history]
+        #history = chat_service.list_messages(db, issue.id, user.id)
+        #prior_msgs = [{"sender": m.sender, "content": m.content} for m in history]
 
         initial_state = {
             "user_query": "",
-            "prior_history": prior_msgs,
+            "prior_history": "",
             "chat_history": [],
             "is_first_message": True,
             "needs_clarification": False,
@@ -109,125 +114,89 @@ async def websocket_endpoint(
         # Wait for the user's first message before touching the workflow.
         # The greeting ("How can I help you today?") is shown statically on the frontend.
         raw = await websocket.receive_text()
-        first_msg = json.loads(raw)
-        user_content = first_msg.get("content", "")
-        attachment_ids = first_msg.get("attachmentIds", [])
+        #first_msg = json.loads(raw)
+        #user_content = first_msg.get("content", "")
+        #attachment_ids = first_msg.get("attachmentIds", [])
 
-        if not user_content:
-            await websocket.close()
-            return
+        #if not user_content:
+        #    await websocket.close()
+        #    return
 
         # Save first user message to DB
-        user_msg = chat_service.record_user_message(db, issue, user_content)
-        if attachment_ids:
-            attachment_service.link_attachments_to_message(
-                db, message=user_msg, attachment_ids=attachment_ids, user_id=user.id
-            )
-            db.refresh(user_msg)
-        await websocket.send_text(json.dumps({
-            "type": "user_message_saved",
-            "message": _message_dto(user_msg),
-        }))
+        #user_msg = chat_service.record_user_message(db, issue, user_content)
+        #if attachment_ids:
+        #    attachment_service.link_attachments_to_message(
+        #        db, message=user_msg, attachment_ids=attachment_ids, user_id=user.id
+        #    )
+        #    db.refresh(user_msg)
+        #await websocket.send_text(json.dumps({
+        #    "type": "user_message_saved",
+        #    "message": _message_dto(user_msg),
+        #}))
 
         # Inject first message into initial state so the workflow uses it directly
-        initial_state["user_query"] = user_content
-        if (chat_id):
-            new_thread_id = chat_id
-        else:
-            new_thread_id = str(uuid.uuid4())
+        # initial_state["user_query"] = user_content
+        #if (chat_id):
+        #    new_thread_id = chat_id
+        #else:
+        new_thread_id = str(uuid.uuid4())
         config = {"configurable": {"thread_id": new_thread_id}}
         should_run = True
         user_input = None
 
         async with _get_checkpointer() as checkpointer:
-            workflow = build_workflow(checkpointer=checkpointer, graph_config=config)
+            workflow = build_workflow(checkpointer=checkpointer, graph_config=config, chat_model_input=chat_model)
 
             while should_run:
-                graph_input = user_input if user_input else initial_state
-                interrupt_value = None
+                if user_input: 
+                    graph_input = user_input
+                else:
+                    graph_input = initial_state
 
                 async for chunk in workflow.workflow.astream(
                     graph_input,
                     config=config,
-                    stream_mode="updates"
+                    version="v2",
+                    debug=True
                     ):
-                    if "__interrupt__" in chunk:
-                        # Always take the last value — LangGraph replays the previous
-                        # interrupt on resume, so earlier values get overwritten.
-                        interrupt_value = chunk["__interrupt__"][-1].value
-                    elif "end_node" in chunk:
-                        end_state = chunk["end_node"]
-                        content = (
-                            end_state.get("final_user_response")
-                            or end_state.get("engagement_response")
-                            or ""
-                        )
-                        if content:
-                            ai_msg = chat_service.record_ai_message(
-                                db, issue, content, AI_ANSWER_NORMAL
-                            )
+                        if "__interrupt__" in chunk.get("data", {}):
+                            # Send interrupt signal to enable user input on client
+                            await websocket.send_text(json.dumps({
+                                "type": "interrupt",
+                                "token": str(chunk["data"]["__interrupt__"][-1].value),
+                                "interrupt_options": "",
+                            }))
+                            await websocket.send_text(json.dumps({
+                                "type": "interrupt",
+                                "message": "Waiting for user input..."
+                            }))
+                            
+                            # Wait for user response
+                            user_response = await websocket.receive_text()
+                            user_input = Command(resume=user_response)
+                        elif "end_node" in chunk.get("data", {}):
+                            # Send final message
                             await websocket.send_text(json.dumps({
                                 "type": "message",
-                                "message": _message_dto(ai_msg),
+                                "message": str(chunk["data"])
                             }))
-
-                        # Create ticket in DB if the triage path ran
-                        ticket_content = end_state.get("ticket_content", "")
-                        if ticket_content:
-                            ticket = Ticket(
-                                issue_id=issue.id,
-                                user_id=user.id,
-                                summary=ticket_content,
-                                status=TICKET_STATUS_NEW,
-                            )
-                            db.add(ticket)
-                            db.commit()
-
-                        should_run = False
-
-                # Handle interrupt AFTER the stream ends — never block inside the loop.
-                if interrupt_value is not None and should_run:
-                    ai_msg = chat_service.record_ai_message(
-                        db, issue, str(interrupt_value), AI_ANSWER_NORMAL
-                    )
-                    await websocket.send_text(json.dumps({
-                        "type": "message",
-                        "message": _message_dto(ai_msg),
-                    }))
-                    await websocket.send_text(json.dumps({
-                        "type": "interrupt",
-                        "message": "Waiting for user input...",
-                    }))
-
-                    raw = await websocket.receive_text()
-                    msg = json.loads(raw)
-                    user_content = msg.get("content", "")
-                    attachment_ids = msg.get("attachmentIds", [])
-
-                    # Save user message to DB
-                    if user_content:
-                        try:
-                            user_msg = chat_service.record_user_message(
-                                db, issue, user_content
-                            )
-                            if attachment_ids:
-                                attachment_service.link_attachments_to_message(
-                                    db,
-                                    message=user_msg,
-                                    attachment_ids=attachment_ids,
-                                    user_id=user.id,
-                                )
-                                db.refresh(user_msg)
+                            should_run = False
+                        elif "engagement_with_user" in chunk.get("data", {}):
                             await websocket.send_text(json.dumps({
-                                "type": "user_message_saved",
-                                "message": _message_dto(user_msg),
+                                "type": "message",
+                                "token": str(chunk["data"]["engagement_with_user"]["engagement_response"]),
+                                "token_type": chunk["type"]
                             }))
-                        except Exception as exc:
-                            print(f"[ws] DB write failed: {exc}")
+                        else:
+                            await websocket.send_text(json.dumps({
+                                "type": "message",
+                                "token": str(chunk["data"]),
+                                "token_type": chunk["type"]
+                            }))
 
-                    user_input = Command(resume=user_content)
-
-        await websocket.close()
+                if "end_node" in chunk.get("data", {}):
+                    should_run = False      
+            await websocket.close()
 
     except WebSocketDisconnect:
         print("[ws] Client disconnected")
