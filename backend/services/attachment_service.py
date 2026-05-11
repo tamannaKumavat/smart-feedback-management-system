@@ -1,22 +1,19 @@
-"""File-upload handling for chat attachments.
+"""File-upload handling for issue attachments in Supabase Storage.
 
-Storage layout::
+Storage key layout::
 
-    <UPLOAD_DIR>/<user_id>/<chat_id>/<attachment_id>_<safe_filename>
+    <user_id>/<issue_id>/<attachment_id>_<safe_filename>
 
-Files are written under a per-user / per-chat tree so a single ``rm -rf``
-of a user's directory cleanly removes their data. The ``storage_path``
-column is the path *relative* to ``UPLOAD_DIR`` so the upload root can
-move without breaking existing rows.
+The ``storage_path`` column stores this object key.
 """
 
 from __future__ import annotations
 
 import os
 import re
-from pathlib import Path
 
 from fastapi import UploadFile
+from supabase import Client, create_client
 from sqlalchemy.orm import Session
 
 from config import ALLOWED_UPLOAD_MIME_PREFIXES, MAX_UPLOAD_BYTES, UPLOAD_DIR
@@ -48,8 +45,13 @@ def _allowed_mime(mime: str | None) -> bool:
     return any(mime.startswith(prefix) for prefix in ALLOWED_UPLOAD_MIME_PREFIXES)
 
 
-def absolute_path(attachment: Attachment) -> Path:
-    return Path(UPLOAD_DIR) / attachment.storage_path
+def _supabase_client() -> Client:
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        raise AttachmentError(
+            "Supabase storage is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.",
+            http_status=500,
+        )
+    return create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 
 def save_upload(
@@ -77,32 +79,41 @@ def save_upload(
     db.add(attachment)
     db.flush()  # populates attachment.id without committing yet
 
-    rel_path = Path(user_id) / chat.id / f"{attachment.id}_{safe_name}"
-    abs_path = Path(UPLOAD_DIR) / rel_path
-    abs_path.parent.mkdir(parents=True, exist_ok=True)
+    object_key = f"{user_id}/{chat.id}/{attachment.id}_{safe_name}"
 
     total = 0
     try:
-        with abs_path.open("wb") as out:
-            while True:
-                chunk = upload.file.read(64 * 1024)
-                if not chunk:
-                    break
-                total += len(chunk)
-                if total > MAX_UPLOAD_BYTES:
-                    out.close()
-                    abs_path.unlink(missing_ok=True)
-                    db.rollback()
-                    raise AttachmentError(
-                        f"File exceeds maximum size of {MAX_UPLOAD_BYTES} bytes",
-                        http_status=413,
-                    )
-                out.write(chunk)
+        chunks: list[bytes] = []
+        while True:
+            chunk = upload.file.read(64 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > MAX_UPLOAD_BYTES:
+                db.rollback()
+                raise AttachmentError(
+                    f"File exceeds maximum size of {MAX_UPLOAD_BYTES} bytes",
+                    http_status=413,
+                )
+            chunks.append(chunk)
     finally:
         upload.file.close()
 
+    payload = b"".join(chunks)
+    content_type = upload.content_type or "application/octet-stream"
+    supabase = _supabase_client()
+    try:
+        supabase.storage.from_(SUPABASE_STORAGE_BUCKET).upload(
+            path=object_key,
+            file=payload,
+            file_options={"content-type": content_type},
+        )
+    except Exception as exc:
+        db.rollback()
+        raise AttachmentError(f"Upload to Supabase failed: {exc}", http_status=502) from exc
+
     attachment.size_bytes = total
-    attachment.storage_path = str(rel_path)
+    attachment.storage_path = object_key
     db.commit()
     db.refresh(attachment)
     return attachment
@@ -142,3 +153,22 @@ def get_user_attachment(
     if att is None or att.user_id != user_id:
         return None
     return att
+
+
+def signed_download_url(attachment: Attachment) -> str:
+    """Create a short-lived signed URL for a private storage object."""
+    supabase = _supabase_client()
+    try:
+        data = supabase.storage.from_(SUPABASE_STORAGE_BUCKET).create_signed_url(
+            path=attachment.storage_path,
+            expires_in=SUPABASE_SIGNED_URL_TTL_SECONDS,
+        )
+    except Exception as exc:
+        raise AttachmentError(
+            f"Could not create signed download URL: {exc}", http_status=502
+        ) from exc
+
+    url = data.get("signedURL") or data.get("signedUrl")
+    if not url:
+        raise AttachmentError("Signed URL missing in Supabase response", http_status=502)
+    return url

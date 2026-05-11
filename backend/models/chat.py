@@ -27,7 +27,7 @@ from sqlalchemy import (
     func,
     JSON,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 
 from db import Base
 
@@ -114,6 +114,8 @@ class Message(Base):
     issue_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("issues.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # Backward-compatible attribute alias used by existing route DTOs.
+    chat_id = synonym("issue_id")
     sender: Mapped[str] = mapped_column(String(16), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     # Only meaningful for AI messages; left as ``normal`` for user messages.
@@ -140,6 +142,8 @@ class Attachment(Base):
     issue_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("issues.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # Backward-compatible attribute alias used by existing service code.
+    chat_id = synonym("issue_id")
     # Nullable: an upload can exist briefly before the message that
     # references it is persisted (the route uploads first, then sends).
     message_id: Mapped[str | None] = mapped_column(
@@ -171,6 +175,12 @@ class Ticket(Base):
     issue_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("issues.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    issue_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("issues.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # Backward-compatible attribute aliases used by existing route/service DTOs.
+    id = synonym("case_id")
+    chat_id = synonym("issue_id")
     user_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
