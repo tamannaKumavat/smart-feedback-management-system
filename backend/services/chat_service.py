@@ -72,6 +72,15 @@ def list_drafts(db: Session, user_id: str) -> list[Issue]:
     return list(db.execute(stmt).scalars())
 
 
+def list_issues(db: Session, user_id: str) -> list[Issue]:
+    stmt = (
+        select(Issue)
+        .where(Issue.user_id == user_id)
+        .order_by(Issue.updated_at.desc(), Issue.created_at.desc())
+    )
+    return list(db.execute(stmt).scalars())
+
+
 def mark_as_draft(db: Session, issue_id: str, user_id: str) -> Issue:
     """Demote an Issue to ``draft`` if the user navigated away mid-flow."""
     issue = get_chat_for_user(db, issue_id, user_id)

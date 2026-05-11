@@ -178,5 +178,5 @@ Defined in `backend/models/chat.py`:
 
 `python backend/init_db.py` runs `Base.metadata.create_all(engine)` and
 is safe to re-run; it only creates missing tables. Migrations are not
-yet wired (Alembic etc.) — column changes during development are
-applied by `docker compose down -v` followed by a fresh init.
+yet wired (Alembic etc.) — for schema changes during development,
+drop/recreate tables in your Supabase database, then run `init_db.py` again.
