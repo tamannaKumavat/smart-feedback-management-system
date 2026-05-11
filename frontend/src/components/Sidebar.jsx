@@ -1,7 +1,6 @@
 import { NavLink } from "react-router-dom";
 import {
   FiActivity,
-  FiClock,
   FiEdit3,
   FiFileText,
   FiLogOut,
@@ -10,7 +9,7 @@ import {
 } from "react-icons/fi";
 
 function itemClassName({ isActive }) {
-  return `group flex items-center gap-3 rounded-[2px] px-3 py-2.5 text-captionlarge font-medium transition ${
+  return `group flex items-center gap-3 rounded-[2px] px-3 py-2.5 text-captionlarge font-medium transition focus:outline-none focus-visible:outline-none ${
     isActive
       ? "bg-brand-red/10 text-brand-red border-l-2 border-brand-red"
       : "text-content-muted hover:bg-surface-page hover:text-content"
@@ -67,11 +66,11 @@ export default function Sidebar({ mode, onLogout }) {
       label: "Drafts",
       icon: <FiFileText size={16} />,
     },
-    {
-      to: "/client/ticket-history",
-      label: "Ticket history",
-      icon: <FiClock size={16} />,
-    },
+    // {
+    //   to: "/client/ticket-history",
+    //   label: "Ticket history",
+    //   icon: <FiClock size={16} />,
+    // },
   ];
 
   const primaryItems = mode === "admin" ? adminItems : clientItems;

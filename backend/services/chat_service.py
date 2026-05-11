@@ -15,10 +15,10 @@ from models.chat import (
     AI_ANSWER_NORMAL,
     AI_ANSWER_SUMMARY,
     AI_ANSWER_TYPES,
-    CHAT_STATUS_ACTIVE,
-    CHAT_STATUS_CLOSED,
-    CHAT_STATUS_DRAFT,
-    CHAT_STATUS_WAITING_CONFIRMATION,
+    ISSUE_STATUS_ACTIVE,
+    ISSUE_STATUS_CLOSED,
+    ISSUE_STATUS_DRAFT,
+    ISSUE_STATUS_WAITING_CONFIRMATION,
     SENDER_AI,
     SENDER_USER,
     SENDERS,
@@ -47,7 +47,7 @@ class ChatError(Exception):
 
 
 def create_chat(db: Session, user_id: str) -> Chat:
-    chat = Chat(user_id=user_id, status=CHAT_STATUS_ACTIVE)
+    chat = Chat(user_id=user_id, status=ISSUE_STATUS_ACTIVE)
     db.add(chat)
     db.commit()
     db.refresh(chat)
@@ -70,8 +70,17 @@ def get_chat_for_user(db: Session, chat_id: str, user_id: str) -> Chat:
 def list_drafts(db: Session, user_id: str) -> list[Chat]:
     stmt = (
         select(Chat)
-        .where(Chat.user_id == user_id, Chat.status == CHAT_STATUS_DRAFT)
+        .where(Chat.user_id == user_id, Chat.status == ISSUE_STATUS_DRAFT)
         .order_by(Chat.updated_at.desc())
+    )
+    return list(db.execute(stmt).scalars())
+
+
+def list_issues(db: Session, user_id: str) -> list[Chat]:
+    stmt = (
+        select(Chat)
+        .where(Chat.user_id == user_id)
+        .order_by(Chat.updated_at.desc(), Chat.created_at.desc())
     )
     return list(db.execute(stmt).scalars())
 
@@ -82,10 +91,10 @@ def mark_as_draft(db: Session, chat_id: str, user_id: str) -> Chat:
     Closed chats stay closed; drafts stay drafts (idempotent).
     """
     chat = get_chat_for_user(db, chat_id, user_id)
-    if chat.status == CHAT_STATUS_CLOSED:
+    if chat.status == ISSUE_STATUS_CLOSED:
         return chat
-    if chat.status != CHAT_STATUS_DRAFT:
-        chat.status = CHAT_STATUS_DRAFT
+    if chat.status != ISSUE_STATUS_DRAFT:
+        chat.status = ISSUE_STATUS_DRAFT
         db.commit()
         db.refresh(chat)
     return chat
@@ -93,13 +102,13 @@ def mark_as_draft(db: Session, chat_id: str, user_id: str) -> Chat:
 
 def resume_draft(db: Session, chat_id: str, user_id: str) -> Chat:
     chat = get_chat_for_user(db, chat_id, user_id)
-    if chat.status == CHAT_STATUS_CLOSED:
+    if chat.status == ISSUE_STATUS_CLOSED:
         raise ChatError("Cannot resume a closed chat", http_status=409)
-    if chat.status != CHAT_STATUS_DRAFT:
+    if chat.status != ISSUE_STATUS_DRAFT:
         # Resuming a non-draft is a no-op rather than an error so the
         # frontend can call this defensively after reconnects.
         return chat
-    chat.status = CHAT_STATUS_ACTIVE
+    chat.status = ISSUE_STATUS_ACTIVE
     db.commit()
     db.refresh(chat)
     return chat
@@ -155,9 +164,9 @@ def assert_can_send_user_message(chat: Chat) -> None:
     Drafts are auto-resumed by the route layer before calling this, but
     we still guard here in case a caller forgets.
     """
-    if chat.status == CHAT_STATUS_CLOSED:
+    if chat.status == ISSUE_STATUS_CLOSED:
         raise ChatError("Chat is closed", http_status=409)
-    if chat.status == CHAT_STATUS_DRAFT:
+    if chat.status == ISSUE_STATUS_DRAFT:
         raise ChatError("Resume the chat before sending messages", http_status=409)
 
 
@@ -173,7 +182,7 @@ def record_ai_message(
         db, chat, sender=SENDER_AI, content=content, ai_answer_type=answer_type
     )
     if answer_type == AI_ANSWER_SUMMARY:
-        chat.status = CHAT_STATUS_WAITING_CONFIRMATION
+        chat.status = ISSUE_STATUS_WAITING_CONFIRMATION
         db.commit()
         db.refresh(chat)
     return message
@@ -207,13 +216,13 @@ def confirm_summary(
     ``accepted`` is True.
     """
     chat = get_chat_for_user(db, chat_id, user_id)
-    if chat.status != CHAT_STATUS_WAITING_CONFIRMATION:
+    if chat.status != ISSUE_STATUS_WAITING_CONFIRMATION:
         raise ChatError(
             "Chat is not waiting for confirmation", http_status=409
         )
 
     if not accepted:
-        chat.status = CHAT_STATUS_ACTIVE
+        chat.status = ISSUE_STATUS_ACTIVE
         db.commit()
         db.refresh(chat)
         return chat, None
@@ -223,7 +232,7 @@ def confirm_summary(
         # Defensive: the status said waiting_confirmation but no summary
         # message exists. Roll back to active rather than create an empty
         # ticket.
-        chat.status = CHAT_STATUS_ACTIVE
+        chat.status = ISSUE_STATUS_ACTIVE
         db.commit()
         raise ChatError("No summary found to confirm", http_status=409)
 
@@ -234,7 +243,7 @@ def confirm_summary(
         status=TICKET_STATUS_OPEN,
     )
     db.add(ticket)
-    chat.status = CHAT_STATUS_CLOSED
+    chat.status = ISSUE_STATUS_CLOSED
     db.commit()
     db.refresh(ticket)
     db.refresh(chat)

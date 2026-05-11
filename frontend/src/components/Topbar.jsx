@@ -1,6 +1,7 @@
 import { FiBell, FiSearch, FiSettings, FiShare2 } from "react-icons/fi";
 import { Link } from "react-router-dom";
 import WebLogo from "./WebLogo.jsx";
+import { getSession } from "../lib/session.js";
 
 function IconButton({ children, hasDot = false }) {
   return (
@@ -17,6 +18,21 @@ function IconButton({ children, hasDot = false }) {
 }
 
 export default function Topbar({ mode }) {
+  const session = getSession();
+  const user = session?.user;
+  const fullName = String(user?.fullName || "").trim();
+  const email = String(user?.email || "").trim();
+  const initialsFromName = fullName
+    ? fullName
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase() || "")
+        .join("")
+    : "";
+  const avatarText =
+    initialsFromName || email.slice(0, 2).toUpperCase() || "AD";
+
   return (
     <header className="sticky top-0 z-20 bg-white  backdrop-blur">
       <div className="mx-auto flex h-16 items-center justify-between gap-4 px-4 sm:px-6">
@@ -49,7 +65,7 @@ export default function Topbar({ mode }) {
             <FiShare2 size={16} />
           </IconButton>
           <span className="ml-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-brand-gray text-captionsmall font-semibold text-white">
-            AD
+            {avatarText}
           </span>
         </div>
       </div>

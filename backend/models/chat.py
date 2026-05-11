@@ -25,7 +25,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 
 from db import Base
 
@@ -34,16 +34,16 @@ def _new_uuid() -> str:
     return str(uuid4())
 
 
-# Chat lifecycle states.
-CHAT_STATUS_ACTIVE = "active"
-CHAT_STATUS_WAITING_CONFIRMATION = "waiting_confirmation"
-CHAT_STATUS_DRAFT = "draft"
-CHAT_STATUS_CLOSED = "closed"
-CHAT_STATUSES = {
-    CHAT_STATUS_ACTIVE,
-    CHAT_STATUS_WAITING_CONFIRMATION,
-    CHAT_STATUS_DRAFT,
-    CHAT_STATUS_CLOSED,
+# Issue lifecycle states.
+ISSUE_STATUS_ACTIVE = "active"
+ISSUE_STATUS_WAITING_CONFIRMATION = "waiting_confirmation"
+ISSUE_STATUS_DRAFT = "draft"
+ISSUE_STATUS_CLOSED = "closed"
+ISSUE_STATUSES = {
+    ISSUE_STATUS_ACTIVE,
+    ISSUE_STATUS_WAITING_CONFIRMATION,
+    ISSUE_STATUS_DRAFT,
+    ISSUE_STATUS_CLOSED,
 }
 
 # Message senders.
@@ -61,16 +61,15 @@ TICKET_STATUS_OPEN = "open"
 TICKET_STATUS_CLOSED = "closed"
 TICKET_STATUSES = {TICKET_STATUS_OPEN, TICKET_STATUS_CLOSED}
 
-
-class Chat(Base):
-    __tablename__ = "chats"
+class Issue(Base):
+    __tablename__ = "issues"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     user_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     status: Mapped[str] = mapped_column(
-        String(32), nullable=False, default=CHAT_STATUS_ACTIVE
+        String(32), nullable=False, default=ISSUE_STATUS_ACTIVE
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -92,16 +91,18 @@ class Chat(Base):
         "Ticket", back_populates="chat", cascade="all, delete-orphan"
     )
 
-    __table_args__ = (Index("ix_chats_user_status", "user_id", "status"),)
+    __table_args__ = (Index("ix_issues_user_status", "user_id", "status"),)
 
 
 class Message(Base):
     __tablename__ = "messages"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
-    chat_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("chats.id", ondelete="CASCADE"), nullable=False, index=True
+    issue_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("issues.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # Backward-compatible attribute alias used by existing route DTOs.
+    chat_id = synonym("issue_id")
     sender: Mapped[str] = mapped_column(String(16), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     # Only meaningful for AI messages; left as ``normal`` for user messages.
@@ -112,7 +113,7 @@ class Message(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    chat: Mapped[Chat] = relationship("Chat", back_populates="messages")
+    chat: Mapped["Issue"] = relationship("Issue", back_populates="messages")
     attachments: Mapped[list["Attachment"]] = relationship(
         "Attachment",
         back_populates="message",
@@ -125,9 +126,11 @@ class Attachment(Base):
     __tablename__ = "attachments"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
-    chat_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("chats.id", ondelete="CASCADE"), nullable=False, index=True
+    issue_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("issues.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # Backward-compatible attribute alias used by existing service code.
+    chat_id = synonym("issue_id")
     # Nullable: an upload can exist briefly before the message that
     # references it is persisted (the route uploads first, then sends).
     message_id: Mapped[str | None] = mapped_column(
@@ -155,10 +158,15 @@ class Attachment(Base):
 class Ticket(Base):
     __tablename__ = "tickets"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
-    chat_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("chats.id", ondelete="CASCADE"), nullable=False, index=True
+    case_id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=_new_uuid
     )
+    issue_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("issues.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # Backward-compatible attribute aliases used by existing route/service DTOs.
+    id = synonym("case_id")
+    chat_id = synonym("issue_id")
     user_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
@@ -169,5 +177,13 @@ class Ticket(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
-    chat: Mapped[Chat] = relationship("Chat", back_populates="tickets")
+    chat: Mapped["Issue"] = relationship("Issue", back_populates="tickets")
+
+
+# Backward-compatible class alias.
+# `Issue` is the canonical model; `Chat` is retained for existing imports.
+Chat = Issue

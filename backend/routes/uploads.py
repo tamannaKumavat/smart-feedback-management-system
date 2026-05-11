@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from db import get_db
@@ -76,11 +76,8 @@ def download_attachment(
     att = attachment_service.get_user_attachment(db, attachment_id, current_user.id)
     if att is None:
         raise HTTPException(status_code=404, detail="Attachment not found")
-    abs_path = attachment_service.absolute_path(att)
-    if not abs_path.exists():
-        raise HTTPException(status_code=404, detail="File missing on disk")
-    return FileResponse(
-        path=str(abs_path),
-        media_type=att.mime_type,
-        filename=att.filename,
-    )
+    try:
+        signed_url = attachment_service.signed_download_url(att)
+    except AttachmentError as e:
+        raise HTTPException(status_code=e.http_status, detail=str(e)) from e
+    return RedirectResponse(url=signed_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
