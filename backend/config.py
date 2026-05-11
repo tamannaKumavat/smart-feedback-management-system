@@ -22,7 +22,7 @@ MOCK_MODE = os.getenv("MOCK_MODE", "true").lower() == "true"
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+psycopg://sfms:sfms@localhost:5433/issues",
+    "postgresql+psycopg://postgres:[YOUR-PASSWORD]@[YOUR-PROJECT-REF].supabase.co:5432/postgres",
 )
 
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me")

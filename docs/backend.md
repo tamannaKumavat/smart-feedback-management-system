@@ -4,8 +4,8 @@ FastAPI service for the Smart Feedback Management System. It powers
 authentication, the AI chat / ticketing flow, file uploads and the
 admin / client read APIs.
 
-- **Stack:** Python 3.11+, FastAPI, SQLAlchemy 2.0, PostgreSQL 16 (via
-  Docker), JWT (HS256), IBM watsonx.ai (mockable).
+- **Stack:** Python 3.11+, FastAPI, SQLAlchemy 2.0, PostgreSQL 16
+  (Supabase), JWT (HS256), IBM watsonx.ai (mockable).
 - **Entry point:** `backend/main.py` (`uvicorn main:app --reload --port 8000`).
 - **Database init:** `python backend/init_db.py` (idempotent).
 
@@ -49,7 +49,7 @@ backend/
 
 | Variable                | Default                                                 | Purpose                                              |
 | ----------------------- | ------------------------------------------------------- | ---------------------------------------------------- |
-| `DATABASE_URL`          | `postgresql+psycopg://sfms:sfms@localhost:5433/sfms`    | SQLAlchemy connection string.                        |
+| `DATABASE_URL`          | `postgresql+psycopg://postgres:[PASSWORD]@[PROJECT].supabase.co:5432/postgres` | SQLAlchemy connection string.                        |
 | `JWT_SECRET`            | `dev-secret-change-me`                                  | HMAC key for access tokens.                          |
 | `JWT_ALGORITHM`         | `HS256`                                                 | JWT signing algorithm.                               |
 | `JWT_EXPIRES_MINUTES`   | `60`                                                    | Default access-token lifetime.                       |
@@ -162,7 +162,6 @@ Constraints:
 ## Local dev
 
 ```bash
-docker compose up -d                 # Postgres
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt

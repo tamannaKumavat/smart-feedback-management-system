@@ -1,11 +1,12 @@
-"""SQLAlchemy models for the chat ticketing system.
+"""SQLAlchemy models for the smart feedback system.
 
 Three entities:
 
-- Chat: a conversation owned by a user, with a lifecycle status.
-- Message: an utterance in a chat, from either the user or the AI.
-- Ticket: a structured record materialised from a chat once the user
-  confirms an AI-produced summary.
+- Issue: a conversation/session owned by a user, with a lifecycle status
+  and a summary of what the issue was about.
+- Message: an utterance in an issue session, from either the user or the AI.
+- Ticket: a structured escalation record created only when the triage agent
+  completes with a confirmed outcome.
 
 IDs are stored as 36-character UUID strings to keep the schema portable
 and to match the existing string-based ``users.id`` foreign key style.
@@ -24,6 +25,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    JSON,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 
@@ -46,6 +48,10 @@ ISSUE_STATUSES = {
     ISSUE_STATUS_CLOSED,
 }
 
+# How the issue was resolved.
+RESOLVED_BY_RAG = "rag"
+RESOLVED_BY_TRIAGE = "triage"
+
 # Message senders.
 SENDER_USER = "user"
 SENDER_AI = "ai"
@@ -57,9 +63,12 @@ AI_ANSWER_SUMMARY = "summary"
 AI_ANSWER_TYPES = {AI_ANSWER_NORMAL, AI_ANSWER_SUMMARY}
 
 # Ticket states.
-TICKET_STATUS_OPEN = "open"
-TICKET_STATUS_CLOSED = "closed"
-TICKET_STATUSES = {TICKET_STATUS_OPEN, TICKET_STATUS_CLOSED}
+TICKET_STATUS_NEW = "New"
+TICKET_STATUS_IN_PROGRESS = "In Progress"
+TICKET_STATUS_RESOLVED = "Resolved"
+TICKET_STATUS_OPEN = "Open"
+TICKET_STATUSES = {TICKET_STATUS_NEW, TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_RESOLVED}
+
 
 class Issue(Base):
     __tablename__ = "issues"
@@ -68,8 +77,12 @@ class Issue(Base):
     user_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default=ISSUE_STATUS_ACTIVE
+    )
+    resolved_by: Mapped[str | None] = mapped_column(
+        String(16), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -83,12 +96,12 @@ class Issue(Base):
 
     messages: Mapped[list["Message"]] = relationship(
         "Message",
-        back_populates="chat",
+        back_populates="issue",
         cascade="all, delete-orphan",
         order_by="Message.created_at",
     )
     tickets: Mapped[list["Ticket"]] = relationship(
-        "Ticket", back_populates="chat", cascade="all, delete-orphan"
+        "Ticket", back_populates="issue", cascade="all, delete-orphan"
     )
 
     __table_args__ = (Index("ix_issues_user_status", "user_id", "status"),)
@@ -113,7 +126,7 @@ class Message(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    chat: Mapped["Issue"] = relationship("Issue", back_populates="messages")
+    issue: Mapped[Issue] = relationship("Issue", back_populates="messages")
     attachments: Mapped[list["Attachment"]] = relationship(
         "Attachment",
         back_populates="message",
@@ -158,8 +171,9 @@ class Attachment(Base):
 class Ticket(Base):
     __tablename__ = "tickets"
 
-    case_id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=_new_uuid
+    case_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
+    issue_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("issues.id", ondelete="CASCADE"), nullable=False, index=True
     )
     issue_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("issues.id", ondelete="CASCADE"), nullable=False, index=True
@@ -170,10 +184,17 @@ class Ticket(Base):
     user_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
+
     summary: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[str] = mapped_column(
-        String(16), nullable=False, default=TICKET_STATUS_OPEN
-    )
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    issue_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    priority: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    team: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    assignee: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default=TICKET_STATUS_NEW)
+    labels: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    recommended_action: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -181,9 +202,5 @@ class Ticket(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    chat: Mapped["Issue"] = relationship("Issue", back_populates="tickets")
+    issue: Mapped[Issue] = relationship("Issue", back_populates="tickets")
 
-
-# Backward-compatible class alias.
-# `Issue` is the canonical model; `Chat` is retained for existing imports.
-Chat = Issue

@@ -16,15 +16,8 @@ from fastapi import UploadFile
 from supabase import Client, create_client
 from sqlalchemy.orm import Session
 
-from config import (
-    ALLOWED_UPLOAD_MIME_PREFIXES,
-    MAX_UPLOAD_BYTES,
-    SUPABASE_SERVICE_ROLE_KEY,
-    SUPABASE_SIGNED_URL_TTL_SECONDS,
-    SUPABASE_STORAGE_BUCKET,
-    SUPABASE_URL,
-)
-from models.chat import Attachment, Chat, Message
+from config import ALLOWED_UPLOAD_MIME_PREFIXES, MAX_UPLOAD_BYTES, UPLOAD_DIR
+from models.chat import Attachment, Issue, Message
 
 
 class AttachmentError(Exception):
@@ -62,9 +55,12 @@ def _supabase_client() -> Client:
 
 
 def save_upload(
-    db: Session, *, chat: Chat, user_id: str, upload: UploadFile
+    db: Session, *, chat: Issue, user_id: str, upload: UploadFile
 ) -> Attachment:
-    """Upload file to Supabase Storage and create DB row."""
+    """Persist an uploaded file to disk and create the DB row.
+
+    The caller has already enforced issue ownership.
+    """
     if not _allowed_mime(upload.content_type):
         raise AttachmentError(
             f"Unsupported file type: {upload.content_type or 'unknown'}"
@@ -73,7 +69,7 @@ def save_upload(
     safe_name = _safe_filename(upload.filename or "file")
 
     attachment = Attachment(
-        chat_id=chat.id,
+        issue_id=chat.id,
         user_id=user_id,
         filename=upload.filename or safe_name,
         mime_type=upload.content_type or "application/octet-stream",
@@ -139,7 +135,7 @@ def link_attachments_to_message(
         att = db.get(Attachment, aid)
         if att is None:
             continue
-        if att.user_id != user_id or att.chat_id != message.chat_id:
+        if att.user_id != user_id or att.issue_id != message.issue_id:
             continue
         if att.message_id and att.message_id != message.id:
             continue

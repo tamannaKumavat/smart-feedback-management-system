@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { FiInbox } from "react-icons/fi";
 import ClientStats from "../../components/dashboard/client/ClientStats.jsx";
 import ProjectHistoryTable from "../../components/dashboard/client/ProjectHistoryTable.jsx";
 import PortalLayout from "../../layouts/PortalLayout.jsx";
 import { listMyIssues } from "../../lib/chatApi.js";
 import { showError } from "../../lib/toast.js";
 
-function mapIssueStatusToPhase(status) {
+function mapTicketStatusToPhase(status) {
   const normalized = String(status || "").toLowerCase();
   if (normalized === "closed") return "resolved";
   if (normalized === "active") return "inProgress";
   if (normalized === "draft") return "created";
+  // waiting_confirmation and any future states.
   return "classified";
 }
 
@@ -37,7 +37,7 @@ export default function ClientDashboard() {
         const data = await listMyIssues();
         if (!cancelled) setIssues(data.issues || []);
       } catch (err) {
-        if (!cancelled) showError(err, "Could not load issues");
+        if (!cancelled) showError(err, "Could not load issue data");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -50,38 +50,38 @@ export default function ClientDashboard() {
 
   const stats = useMemo(() => {
     const total = issues.length;
-    const active = issues.filter(
+    const inProgress = issues.filter(
       (i) => String(i.status || "").toLowerCase() === "active",
     ).length;
-    const closed = issues.filter(
+    const resolved = issues.filter(
       (i) => String(i.status || "").toLowerCase() === "closed",
     ).length;
-    const draft = issues.filter(
-      (i) => String(i.status || "").toLowerCase() === "draft",
-    ).length;
+    const avgResponse = "N/A";
     return [
       {
-        id: "total",
+        id: "totalCreated",
         title: "Total issues",
         value: String(total),
         iconKey: "clipboard",
       },
       {
-        id: "active",
-        title: "Active issues",
-        value: String(active),
+        id: "pending",
+        title: "In progress",
+        value: String(inProgress),
         iconKey: "clock",
+        percentOfTotal: total ? Math.round((inProgress / total) * 100) : 0,
       },
       {
-        id: "closed",
-        title: "Closed issues",
-        value: String(closed),
+        id: "resolved",
+        title: "Resolved",
+        value: String(resolved),
         iconKey: "checkCircle",
+        percentOfTotal: total ? Math.round((resolved / total) * 100) : 0,
       },
       {
-        id: "draft",
-        title: "Draft issues",
-        value: String(draft),
+        id: "avgResponse",
+        title: "Average response time",
+        value: avgResponse,
         iconKey: "zap",
       },
     ];
@@ -92,8 +92,23 @@ export default function ClientDashboard() {
       issues.map((issue) => ({
         id: issue.id,
         date: formatDate(issue.createdAt),
-        ticket: issue.summary || "Issue without summary",
-        timelinePhase: mapIssueStatusToPhase(issue.status),
+        ticket: issue.summary || "Issue",
+        timelinePhase: mapTicketStatusToPhase(issue.status),
+        timeline: {
+          created: {
+            at: formatDate(issue.createdAt),
+            detail: "Issue created",
+          },
+          classified: null,
+          inProgress: null,
+          resolved:
+            String(issue.status || "").toLowerCase() === "closed"
+              ? {
+                  at: formatDate(issue.updatedAt || issue.createdAt),
+                  detail: "Issue resolved",
+                }
+              : null,
+        },
       })),
     [issues],
   );
@@ -107,19 +122,6 @@ export default function ClientDashboard() {
           {loading ? (
             <div className="flex flex-1 items-center justify-center text-[13px] text-slate-500">
               Loading issues...
-            </div>
-          ) : rows.length === 0 ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500">
-                <FiInbox className="h-5 w-5" />
-              </div>
-              <p className="text-[15px] font-semibold text-slate-800">
-                No issues created yet
-              </p>
-              <p className="max-w-[420px] text-[13px] text-slate-500">
-                Once you start a chat and create an issue, it will appear here
-                with its current status and latest update.
-              </p>
             </div>
           ) : (
             <ProjectHistoryTable title="My Issues" rows={rows} />
