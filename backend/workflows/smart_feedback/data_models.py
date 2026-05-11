@@ -58,6 +58,10 @@ class AnalysisAgentResult(BaseModel):
     )
 
 
+class InterruptData(TypedDict):
+    content: str
+    options: []
+
 class SmartFeedbackState(TypedDict):
     user_query: str
     prior_history: list  # [{sender, content}] from DB — conversation so far
