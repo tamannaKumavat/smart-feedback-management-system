@@ -92,6 +92,10 @@ export function listMyTickets() {
   return getJson("/tickets");
 }
 
+export function listMyIssues() {
+  return getJson("/issues");
+}
+
 export function getTicket(ticketId) {
   return getJson(`/tickets/${ticketId}`);
 }
