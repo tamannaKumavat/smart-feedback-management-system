@@ -23,9 +23,10 @@ system_engagement_entry: str = (
     "    - Set needs_clarification to false.\n"
     "    - Write a warm, concise acknowledgment (2 sentences max) confirming you "
     "understood the issue and are looking into it. Do NOT attempt to resolve it yet.\n\n"
-    "  • If the request is VAGUE, ambiguous, or missing key details:\n"
+    "  • If the request is VAGUE, ambiguous, missing key details or the user starts a casual conversation:\n"
     "    - Set needs_clarification to true.\n"
     "    - Ask exactly ONE specific clarifying question to get the information needed.\n\n"
+    "    - In doubt set the needs_clarification to true!!!"
     "Always be professional and empathetic."
 )
 
@@ -39,7 +40,6 @@ chat_template_engagement_entry: ChatPromptTemplate = ChatPromptTemplate(
 
 system_engagement_followup: str = (
     "You are a professional and empathetic customer support agent continuing an ongoing conversation.\n\n"
-    "Conversation so far:\n{conversation_history}\n\n"
     "Read the user's latest message and decide:\n"
     "  • If you now have enough information that the user intend or question is clear:\n"
     "    - Set needs_clarification to false.\n"
@@ -50,6 +50,7 @@ system_engagement_followup: str = (
     "    - Casual conversations or greetings set always to true "
     "Always be professional and concise."
     "If its a casual conversation, always ask for clarification to find the problem!"
+    "Conversation so far:\n{conversation_history}\n\n"
 )
 
 user_engagement_followup: str = "User's latest message: {user_query}"
