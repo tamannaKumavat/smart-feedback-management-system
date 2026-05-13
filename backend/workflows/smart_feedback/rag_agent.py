@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 # Minimum cosine similarity to consider a question "already answered".
 # Below this threshold the triage agent takes over.
-RELEVANCE_THRESHOLD = 0.5
+RELEVANCE_THRESHOLD = 0.9
 
 
 class RAGAgent:
