@@ -11,7 +11,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
 
 from config import DATABASE_URL, MOCK_MODE
-from db import SessionLocal
+from db import SessionLocal, AsyncSessionLocal
 from models.chat import AI_ANSWER_NORMAL, TICKET_STATUS_NEW, Ticket
 from services import attachment_service, chat_service
 from services.security import _resolve_user
@@ -67,7 +67,7 @@ async def websocket_endpoint(
     token: str | None = Query(default=None),
     chat_id: str | None = Query(default=None),
 ):
-    db = SessionLocal()
+    db = AsyncSessionLocal()
     try:
         # Authenticate
         #try:
@@ -113,7 +113,7 @@ async def websocket_endpoint(
 
         # Wait for the user's first message before touching the workflow.
         # The greeting ("How can I help you today?") is shown statically on the frontend.
-        raw = await websocket.receive_text()
+        # raw = await websocket.receive_text()
         #first_msg = json.loads(raw)
         #user_content = first_msg.get("content", "")
         #attachment_ids = first_msg.get("attachmentIds", [])
@@ -165,10 +165,6 @@ async def websocket_endpoint(
                                 "type": "interrupt",
                                 "token": str(chunk["data"]["__interrupt__"][-1].value),
                                 "interrupt_options": "",
-                            }))
-                            await websocket.send_text(json.dumps({
-                                "type": "interrupt",
-                                "message": "Waiting for user input..."
                             }))
                             
                             # Wait for user response
