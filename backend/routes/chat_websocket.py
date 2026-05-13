@@ -164,7 +164,6 @@ async def websocket_endpoint(
                             await websocket.send_text(json.dumps({
                                 "type": "interrupt",
                                 "token": str(chunk["data"]["__interrupt__"][-1].value),
-                                "interrupt_options": "",
                             }))
                             
                             # Wait for user response
@@ -174,7 +173,7 @@ async def websocket_endpoint(
                             # Send final message
                             await websocket.send_text(json.dumps({
                                 "type": "message",
-                                "message": str(chunk["data"])
+                                "token": str(chunk["data"])
                             }))
                             should_run = False
                         elif "engagement_with_user" in chunk.get("data", {}):
@@ -183,12 +182,19 @@ async def websocket_endpoint(
                                 "token": str(chunk["data"]["engagement_with_user"]["engagement_response"]),
                                 "token_type": chunk["type"]
                             }))
-                        else:
+                        elif "formulate_ticket_content" in chunk.get("data", {}):
                             await websocket.send_text(json.dumps({
                                 "type": "message",
-                                "token": str(chunk["data"]),
+                                "token": str(chunk["data"]["formulate_ticket_content"]["ticket_summary"]),
                                 "token_type": chunk["type"]
                             }))
+                        else:
+                            #await websocket.send_text(json.dumps({
+                            #    "type": "message",
+                            #    "token": str(chunk["data"]),
+                            #    "token_type": chunk["type"]
+                            #}))
+                            pass
 
                 if "end_node" in chunk.get("data", {}):
                     should_run = False      
