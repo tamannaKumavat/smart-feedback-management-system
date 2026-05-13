@@ -1,9 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { FaRegShareFromSquare } from "react-icons/fa6";
 import { FiPaperclip, FiPlus, FiSend, FiSmile, FiX } from "react-icons/fi";
 import PortalLayout from "../../layouts/PortalLayout.jsx";
-import { attachmentDownloadUrl, uploadAttachment } from "../../lib/chatApi.js";
+import {
+  attachmentDownloadUrl,
+  confirmSummary,
+  createChat,
+  getMessages,
+  markChatAsDraft,
+  resumeChat,
+  uploadAttachment,
+} from "../../lib/chatApi.js";
+import { getToken } from "../../lib/session.js";
 import { showError, showSuccess } from "../../lib/toast.js";
 
 /*
@@ -104,8 +113,15 @@ function Avatar({ src, label }) {
 
 export default function ClientCreateTicket() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const chatId = searchParams.get("chatId");
+  const token = getToken();
+  const params = new URLSearchParams();
+  if (token) params.set("token", token);
+  if (chatId) params.set("chat_id", chatId);
 
   // State
+  const [chat, setChat] = useState(null);
   const [messages, setMessages] = useState([]);
   const [messageInput, setMessageInput] = useState("");
   const [pendingFile, setPendingFile] = useState(null);
@@ -118,129 +134,173 @@ export default function ClientCreateTicket() {
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
   const wsRef = useRef(null);
-  const setupInProgressRef = useRef(false);
+  const chatRef = useRef(null);
 
-  // Connect WebSocket on mount
 useEffect(() => {
-  const wsUrl = `ws://${window.location.hostname}:8000/ws/chat`;
-  if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
-    return;
-  }
-  const setupWebSocket = () => {
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      console.log("[WS] Connected");
-      setupInProgressRef.current = false;
-      setWsConnected(true);
-      setAiWaitingForInput(false);
-      showSuccess("Connected to server");
-    }; 
-
-    ws.onmessage = (e) => {
-      console.log("[WS] Message received:", e.data);
-      try {
-        const data = JSON.parse(e.data);
-
-        if (data.type === "interrupt") {
-          setAiWaitingForInput(true); 
-          setMessages((prev) => [...prev, {
-            id: `ai-${Date.now()}`,
-            sender: "ai",
-            content: data.token,
-            aiAnswerType: "normal",
-            createdAt: new Date().toISOString(),
-          }]);
-        }
-        // Handle token streaming
-        else if (data.type === "token") {
-          setAiWaitingForInput(false);
-          setMessages((prev) => {
-            const lastMsg = prev[prev.length - 1];
-            if (lastMsg?.sender === "ai") {
-              return [
-                ...prev.slice(0, -1),
-                { ...lastMsg, content: (lastMsg.content || "") + data.token },
-              ];
-            } else {
-              return [...prev, {
-                id: `ai-${Date.now()}`,
-                sender: "ai",
-                content: data.token,
-                aiAnswerType: "normal",
-                createdAt: new Date().toISOString(),
-              }];
-            }
-          });
-        }
-        // Handle full messages
-        else if (data.type === "message" && data.message) {
-          setAiWaitingForInput(false);
-          setMessages((prev) => [...prev, {
-            id: data.message.id || `ai-${Date.now()}`,
-            sender: data.message.sender || "ai",
-            content: data.message.content,
-            aiAnswerType: data.message.aiAnswerType || "normal",
-            createdAt: data.message.createdAt || new Date().toISOString(),
-            attachments: data.message.attachments || [],
-          }]);
-        }         else if (data.type === "message" && data.token) {
-          setAiWaitingForInput(false);
-          setMessages((prev) => [...prev, {
-            id: `ai-${Date.now()}`,
-            sender: "ai",
-            content: data.token,
-            aiAnswerType: "normal",
-            createdAt: new Date().toISOString(),
-          }]);
-        }
-        // Handle other JSON messages
-        else {
-          setMessages((prev) => [...prev, {
-            id: `ai-${Date.now()}`,
-            sender: "ai",
-            content: JSON.stringify(data),
-            aiAnswerType: "normal",
-            createdAt: new Date().toISOString(),
-          }]);
-        }
-  } catch (err) {
-        setMessages((prev) => [...prev, {
-          id: `ai-${Date.now()}`,
-          sender: "ai",
-          content: e.data,
-          aiAnswerType: "normal",
-          createdAt: new Date().toISOString(),
-        }]);
+  let cancelled = false;
+  
+  async function initializeChat() {
+    try {
+      if (chatId) {
+        // Resume existing chat from URL parameter
+        const [resumed, history] = await Promise.all([
+          resumeChat(chatId),
+          getMessages(chatId),
+        ]);
+        
+        if (cancelled) return;
+        setChat(resumed.chat);
+        setMessages(history.messages || []);
+      } else {
+        // Create brand new chat
+        const created = await createChat();
+        if (cancelled) return;
+        setChat(created.chat);
+        setMessages([]);
       }
-    }; 
-
-    ws.onerror = (error) => {
-      console.error("[WS] Error:", error);
-      showError(`WebSocket error`);
-      setWsConnected(false);
-    };
-
-    ws.onclose = () => {
-      console.log("[WS] Disconnected");
-      setWsConnected(false);
-      setAiWaitingForInput(false);
-      
-      setTimeout(() => {
-        setupWebSocket();
-      }, 5000);
-    };
-  };
-
-  setupWebSocket();
-
-  return () => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.close();
+    } catch (err) {
+      if (cancelled) return;
+      showError(err, "Could not initialize chat");
     }
+  }
+  
+  initializeChat();
+  
+  return () => {
+    cancelled = true;
   };
-}, []);
+}, [chatId]); // Only depends on chatId from URL
+
+// Step 2: Keep chatRef in sync with chat state
+useEffect(() => {
+  chatRef.current = chat;
+}, [chat]);
+
+// Step 3: Connect WebSocket ONLY after chat is initialized
+useEffect(() => {
+  if (!chat) return; // Wait for chat to be created/loaded
+    
+    const wsUrl = `ws://${window.location.hostname}:8000/ws/chat?${params}`;
+    if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
+      return;
+    }
+    
+    const setupWebSocket = () => {
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log("[WS] Connected");
+        setWsConnected(true);
+        setAiWaitingForInput(false);
+        showSuccess("Connected to server");
+        
+      }; 
+
+      ws.onmessage = (e) => {
+        console.log("[WS] Message received:", e.data);
+        try {
+          const data = JSON.parse(e.data);
+          console.log(chatRef.current)
+          if (data.type === "interrupt") {
+            setAiWaitingForInput(true); 
+            setMessages((prev) => [...prev, {
+              id: `ai-${Date.now()}`,
+              sender: "ai",
+              content: data.token,
+              aiAnswerType: "normal",
+              createdAt: new Date().toISOString(),
+            }]);
+          }
+          // Handle token streaming
+          else if (data.type === "token") {
+            setAiWaitingForInput(false);
+            setMessages((prev) => {
+              const lastMsg = prev[prev.length - 1];
+              if (lastMsg?.sender === "ai") {
+                return [
+                  ...prev.slice(0, -1),
+                  { ...lastMsg, content: (lastMsg.content || "") + data.token },
+                ];
+              } else {
+                return [...prev, {
+                  id: `ai-${Date.now()}`,
+                  sender: "ai",
+                  content: data.token,
+                  aiAnswerType: "normal",
+                  createdAt: new Date().toISOString(),
+                }];
+              }
+            });
+          }
+          // Handle full messages
+          else if (data.type === "message" && data.message) {
+            setAiWaitingForInput(false);
+            setMessages((prev) => [...prev, {
+              id: data.message.id || `ai-${Date.now()}`,
+              sender: data.message.sender || "ai",
+              content: data.message.content,
+              aiAnswerType: data.message.aiAnswerType || "normal",
+              createdAt: data.message.createdAt || new Date().toISOString(),
+              attachments: data.message.attachments || [],
+            }]);
+          } 
+          else if (data.type === "message" && data.token) {
+            setAiWaitingForInput(false);
+            setMessages((prev) => [...prev, {
+              id: `ai-${Date.now()}`,
+              sender: "ai",
+              content: data.token,
+              aiAnswerType: "normal",
+              createdAt: new Date().toISOString(),
+            }]);
+          }
+          // Handle other JSON messages
+          else {
+            setMessages((prev) => [...prev, {
+              id: `ai-${Date.now()}`,
+              sender: "ai",
+              content: JSON.stringify(data),
+              aiAnswerType: "normal",
+              createdAt: new Date().toISOString(),
+            }]);
+          }
+        } catch (err) {
+          setMessages((prev) => [...prev, {
+            id: `ai-${Date.now()}`,
+            sender: "ai",
+            content: e.data,
+            aiAnswerType: "normal",
+            createdAt: new Date().toISOString(),
+          }]);
+        }
+      }; 
+
+      ws.onerror = (error) => {
+        console.error("[WS] Error:", error);
+        showError(`WebSocket error`);
+        setWsConnected(false);
+      };
+
+      ws.onclose = () => {
+        console.log("[WS] Disconnected");
+        setWsConnected(false);
+        setAiWaitingForInput(false);
+        
+        setTimeout(() => {
+          setupWebSocket();
+        }, 5000);
+      };
+    };
+
+    setupWebSocket();
+
+    return () => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.close();
+      }
+    };
+  }, [chat]);
 
   // Auto-scroll to bottom when messages update
   useEffect(() => {

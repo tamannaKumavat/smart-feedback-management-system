@@ -19,7 +19,8 @@ from workflows.smart_feedback.workflow import build_workflow
 from langchain_ollama import ChatOllama
 
 
-chat_model = ChatOllama(model="hf.co/unsloth/granite-4.0-h-tiny-GGUF:Q8_0")
+chat_model = ChatOllama(model="hf.co/unsloth/granite-4.0-h-tiny-GGUF:Q8_0", temperature=0.1)
+
 
 os.environ["LANGGRAPH_STRICT_MSGPACK"] = "true"
 
@@ -67,47 +68,28 @@ async def websocket_endpoint(
     token: str | None = Query(default=None),
     chat_id: str | None = Query(default=None),
 ):
-    db = AsyncSessionLocal()
+    db = SessionLocal()
     try:
         # Authenticate
-        #try:
-        #    user = _resolve_user(token, db)
-        #except Exception:
-        #    await websocket.close(code=4001)
-        #    return
+        try:
+            user = _resolve_user(token, db)
+        except Exception:
+            await websocket.close(code=4001)
+            return
 
         # Load or create Issue
-        #try:
-        #    if chat_id:
-        #        issue = chat_service.get_chat_for_user(db, chat_id, user.id)
-        #    else:
-        #        issue = chat_service.create_chat(db, user.id)
-        #except Exception:
-        #    await websocket.close(code=4003)
-        #    return
+        try:
+            if chat_id:
+                issue = chat_service.get_chat_for_user(db, chat_id, user.id)
+            else:
+                issue = chat_service.create_chat(db, user.id)
+        except Exception:
+            await websocket.close(code=4003)
+            return
 
         # Build prior history for the workflow
         #history = chat_service.list_messages(db, issue.id, user.id)
         #prior_msgs = [{"sender": m.sender, "content": m.content} for m in history]
-
-        initial_state = {
-            "user_query": "",
-            "prior_history": "",
-            "chat_history": [],
-            "is_first_message": True,
-            "needs_clarification": False,
-            "human_assessment": "",
-            "ticket_id": "",
-            "analysis_agent_result": None,
-            "rag_results": [],
-            "rag_user_assessment": "",
-            "rag_workflow_state": {},
-            "triage_workflow": {},
-            "engagement_response": "",
-            "ready_to_create_ticket": False,
-            "ticket_content": "",
-            "final_user_response": "",
-        }
 
         await websocket.accept()
 
@@ -133,20 +115,36 @@ async def websocket_endpoint(
         #    "type": "user_message_saved",
         #    "message": _message_dto(user_msg),
         #}))
-
+        initial_state = {
+            "user_query": "",
+            "prior_history": "",
+            "chat_history": [],
+            "is_first_message": True,
+            "needs_clarification": False,
+            "human_assessment": "",
+            "ticket_id": "",
+            "analysis_agent_result": None,
+            "rag_results": [],
+            "rag_user_assessment": "",
+            "rag_workflow_state": {},
+            "triage_workflow": {},
+            "engagement_response": "",
+            "ready_to_create_ticket": False,
+            "ticket_content": "",
+            "final_user_response": "",
+        }
         # Inject first message into initial state so the workflow uses it directly
         # initial_state["user_query"] = user_content
-        #if (chat_id):
-        #    new_thread_id = chat_id
-        #else:
-        new_thread_id = str(uuid.uuid4())
+        if (chat_id):
+            new_thread_id = chat_id
+        else:
+            new_thread_id = issue.id
         config = {"configurable": {"thread_id": new_thread_id}}
         should_run = True
         user_input = None
 
         async with _get_checkpointer() as checkpointer:
             workflow = build_workflow(checkpointer=checkpointer, graph_config=config, chat_model_input=chat_model)
-
             while should_run:
                 if user_input: 
                     graph_input = user_input
@@ -198,7 +196,7 @@ async def websocket_endpoint(
 
                 if "end_node" in chunk.get("data", {}):
                     should_run = False      
-            await websocket.close()
+            
 
     except WebSocketDisconnect:
         print("[ws] Client disconnected")
@@ -211,3 +209,4 @@ async def websocket_endpoint(
             pass
     finally:
         db.close()
+        await websocket.close()
