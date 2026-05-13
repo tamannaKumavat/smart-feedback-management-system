@@ -21,9 +21,9 @@ class EngagementDecision(BaseModel):
     needs_clarification: bool = Field(
         description=(
             "True if the user query is vague or missing key details and a "
-            "clarifying question must be asked before proceeding."
+            "clarifying question must be asked before proceeding. Also if the user starts small talk!!"
         ),
-        default=False,
+        default=True,
     )
     response: str = Field(
         description=(
@@ -78,6 +78,7 @@ class SmartFeedbackState(TypedDict):
     engagement_response: str       # RAG answer composed by Phase 2 engagement_with_user
     final_user_response: str       # closing message sent at end_node (triage or RAG confirmed)
     ready_to_create_ticket: bool   # True after Phase 2
-    ticket_summary: str            # structured ticket body built by formulate_ticket_content
+    #ticket_summary: str            # structured ticket body built by formulate_ticket_content
+    ticket_content: str
     incident_assessment: Annotated[List[IncidentAssessment], add]
     incident_assessment_judge: Annotated[List[IncidentAssessmentJudge], add]
