@@ -453,9 +453,6 @@ class SmartFeedbackWorkflow:
             }
         )
         self._judge_current_iteration += 1
-        print(
-            f"[judge_triage_request] Judge decision: {judged_incident_assessment.overall_assessment}"
-        )
         return {"incident_assessment_judge": [judged_incident_assessment]}
 
     def route_judge(self, state: SmartFeedbackState) -> str:
