@@ -118,28 +118,33 @@ export default function ClientCreateTicket() {
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
   const wsRef = useRef(null);
+  const setupInProgressRef = useRef(false);
 
   // Connect WebSocket on mount
-  useEffect(() => {
-    const wsUrl = `ws://${window.location.hostname}:8000/ws/chat`;
+useEffect(() => {
+  const wsUrl = `ws://${window.location.hostname}:8000/ws/chat`;
+  if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
+    return;
+  }
+  const setupWebSocket = () => {
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
       console.log("[WS] Connected");
+      setupInProgressRef.current = false;
       setWsConnected(true);
-      setAiWaitingForInput(true);
+      setAiWaitingForInput(false);
       showSuccess("Connected to server");
-    };
+    }; 
 
     ws.onmessage = (e) => {
       console.log("[WS] Message received:", e.data);
       try {
         const data = JSON.parse(e.data);
 
-        // Handle interrupt: AI is waiting for user input
         if (data.type === "interrupt") {
-          setAiWaitingForInput(true);
+          setAiWaitingForInput(true); 
           setMessages((prev) => [...prev, {
             id: `ai-${Date.now()}`,
             sender: "ai",
@@ -200,8 +205,7 @@ export default function ClientCreateTicket() {
             createdAt: new Date().toISOString(),
           }]);
         }
-      } catch (err) {
-        // Raw text fallback
+  } catch (err) {
         setMessages((prev) => [...prev, {
           id: `ai-${Date.now()}`,
           sender: "ai",
@@ -210,39 +214,33 @@ export default function ClientCreateTicket() {
           createdAt: new Date().toISOString(),
         }]);
       }
-    };
+    }; 
 
     ws.onerror = (error) => {
       console.error("[WS] Error:", error);
-      showError(`WebSocket error: ${error.message || error}`);
+      showError(`WebSocket error`);
       setWsConnected(false);
     };
 
     ws.onclose = () => {
       console.log("[WS] Disconnected");
-      showError("Disconnected from server. Reconnecting...");
       setWsConnected(false);
       setAiWaitingForInput(false);
-      // Reconnect after 3 seconds
+      
       setTimeout(() => {
-        if (wsRef.current?.readyState !== WebSocket.OPEN) {
-          const newWs = new WebSocket(wsUrl);
-          wsRef.current = newWs;
-          newWs.onopen = () => {
-            setWsConnected(true);
-            setAiWaitingForInput(true);
-          };
-          newWs.onerror = (err) => console.error("[WS] Reconnect error:", err);
-        }
+        setupWebSocket();
       }, 5000);
     };
+  };
 
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-    };
-  }, []);
+  setupWebSocket();
+
+  return () => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.close();
+    }
+  };
+}, []);
 
   // Auto-scroll to bottom when messages update
   useEffect(() => {
@@ -349,11 +347,11 @@ const handleSubmit = async (event) => {
         className={isUser ? "ml-auto w-full max-w-[min(100%,560px)]" : "w-full max-w-[min(100%,560px)]"}
       >
         <p className={`mb-2 text-[14px] font-semibold leading-none text-[#101827] ${isUser ? "text-right pr-11" : "pl-12"}`}>
-          {isUser ? "You" : "Ruag Team"}
+          {isUser ? "You" : "Team"}
           {time ? `, ${time}` : ""}
         </p>
         <div className={`flex items-end gap-2 ${isUser ? "justify-end" : "justify-start"}`}>
-          {!isUser ? <Avatar src={teamAvatar} label="Ruag Team" /> : null}
+          {!isUser ? <Avatar src={teamAvatar} label="Team" /> : null}
           <div className={`max-w-[560px] ${isUser ? bubbleUser : bubbleTeam} whitespace-pre-wrap`}>
             <p>{msg.content}</p>
             {msg.attachments?.length ? (
@@ -370,10 +368,7 @@ const handleSubmit = async (event) => {
     );
   };
 
-  // Input field is disabled if:
-  // - WebSocket is not connected
-  // - AI is not waiting for input
-  // - User is sending a message
+
   const inputDisabled = !wsConnected || !aiWaitingForInput || sending;
 
   return (
