@@ -202,7 +202,7 @@ useEffect(() => {
         try {
           const data = JSON.parse(e.data);
           console.log(chatRef.current)
-          if (data.type === "interrupt") {
+          if (data.type === "options") {
             setAiWaitingForInput(true);
             if (data.content) {
               const optionsHint = data.options && data.options.length > 0
@@ -217,45 +217,12 @@ useEffect(() => {
               }]);
             }
           }
-          // Handle token streaming
-          else if (data.type === "token") {
-            setAiWaitingForInput(false);
-            setMessages((prev) => {
-              const lastMsg = prev[prev.length - 1];
-              if (lastMsg?.sender === "ai") {
-                return [
-                  ...prev.slice(0, -1),
-                  { ...lastMsg, content: (lastMsg.content || "") + data.token },
-                ];
-              } else {
-                return [...prev, {
-                  id: `ai-${Date.now()}`,
-                  sender: "ai",
-                  content: data.token,
-                  aiAnswerType: "normal",
-                  createdAt: new Date().toISOString(),
-                }];
-              }
-            });
-          }
-          // Handle full messages
-          else if (data.type === "message" && data.message) {
-            setAiWaitingForInput(false);
-            setMessages((prev) => [...prev, {
-              id: data.message.id || `ai-${Date.now()}`,
-              sender: data.message.sender || "ai",
-              content: data.message.content,
-              aiAnswerType: data.message.aiAnswerType || "normal",
-              createdAt: data.message.createdAt || new Date().toISOString(),
-              attachments: data.message.attachments || [],
-            }]);
-          } 
-          else if (data.type === "message" && data.token) {
+          else if (data.type === "message" && data.content) {
             setAiWaitingForInput(false);
             setMessages((prev) => [...prev, {
               id: `ai-${Date.now()}`,
               sender: "ai",
-              content: data.token,
+              content: data.content,
               aiAnswerType: "normal",
               createdAt: new Date().toISOString(),
             }]);
