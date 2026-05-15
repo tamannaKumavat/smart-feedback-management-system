@@ -60,7 +60,7 @@ class AnalysisAgentResult(BaseModel):
 
 class InterruptData(TypedDict):
     content: str
-    options: []
+    options: list
 
 class SmartFeedbackState(TypedDict):
     user_query: str
@@ -80,5 +80,7 @@ class SmartFeedbackState(TypedDict):
     ready_to_create_ticket: bool   # True after Phase 2
     #ticket_summary: str            # structured ticket body built by formulate_ticket_content
     ticket_content: str
+    ticket_summary: str
+    ticket_data: dict
     incident_assessment: Annotated[List[IncidentAssessment], add]
     incident_assessment_judge: Annotated[List[IncidentAssessmentJudge], add]

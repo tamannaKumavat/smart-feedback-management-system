@@ -203,14 +203,19 @@ useEffect(() => {
           const data = JSON.parse(e.data);
           console.log(chatRef.current)
           if (data.type === "interrupt") {
-            setAiWaitingForInput(true); 
-            setMessages((prev) => [...prev, {
-              id: `ai-${Date.now()}`,
-              sender: "ai",
-              content: data.token,
-              aiAnswerType: "normal",
-              createdAt: new Date().toISOString(),
-            }]);
+            setAiWaitingForInput(true);
+            if (data.content) {
+              const optionsHint = data.options && data.options.length > 0
+                ? ` (${data.options.join(" / ")})`
+                : "";
+              setMessages((prev) => [...prev, {
+                id: `ai-${Date.now()}`,
+                sender: "ai",
+                content: `${data.content}${optionsHint}`,
+                aiAnswerType: "normal",
+                createdAt: new Date().toISOString(),
+              }]);
+            }
           }
           // Handle token streaming
           else if (data.type === "token") {
@@ -255,16 +260,7 @@ useEffect(() => {
               createdAt: new Date().toISOString(),
             }]);
           }
-          // Handle other JSON messages
-          else {
-            setMessages((prev) => [...prev, {
-              id: `ai-${Date.now()}`,
-              sender: "ai",
-              content: JSON.stringify(data),
-              aiAnswerType: "normal",
-              createdAt: new Date().toISOString(),
-            }]);
-          }
+          // ignore unknown/internal workflow messages
         } catch (err) {
           setMessages((prev) => [...prev, {
             id: `ai-${Date.now()}`,

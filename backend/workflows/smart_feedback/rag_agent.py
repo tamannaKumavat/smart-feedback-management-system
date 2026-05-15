@@ -17,6 +17,10 @@ logger = logging.getLogger(__name__)
 # Below this threshold the triage agent takes over.
 RELEVANCE_THRESHOLD = 0.9
 
+# Set to False to skip IBM WatsonX embeddings and use keyword search instead.
+# Flip back to True when you want real vector search.
+_USE_IBM_EMBEDDINGS = True
+
 
 class RAGAgent:
     """Q&A lookup against the rag_chunks pgvector table.
@@ -37,7 +41,7 @@ class RAGAgent:
 
     def __init__(self):
         self._embeddings_model = None
-        if not MOCK_MODE:
+        if not MOCK_MODE and _USE_IBM_EMBEDDINGS:
             self._init_embeddings()
 
     def _init_embeddings(self) -> None:

@@ -19,7 +19,7 @@ from workflows.smart_feedback.workflow import build_workflow
 from langchain_ollama import ChatOllama
 
 
-chat_model = ChatOllama(model="hf.co/unsloth/granite-4.0-h-tiny-GGUF:Q8_0", temperature=0.1)
+# chat_model = ChatOllama(model="qwen2.5-coder:3b", temperature=0.1)
 
 
 os.environ["LANGGRAPH_STRICT_MSGPACK"] = "true"
@@ -88,36 +88,14 @@ async def websocket_endpoint(
             return
 
         # Build prior history for the workflow
-        #history = chat_service.list_messages(db, issue.id, user.id)
-        #prior_msgs = [{"sender": m.sender, "content": m.content} for m in history]
+        history = chat_service.list_messages(db, issue.id, user.id)
+        prior_msgs = [{"sender": m.sender, "content": m.content} for m in history]
 
         await websocket.accept()
 
-        # Wait for the user's first message before touching the workflow.
-        # The greeting ("How can I help you today?") is shown statically on the frontend.
-        # raw = await websocket.receive_text()
-        #first_msg = json.loads(raw)
-        #user_content = first_msg.get("content", "")
-        #attachment_ids = first_msg.get("attachmentIds", [])
-
-        #if not user_content:
-        #    await websocket.close()
-        #    return
-
-        # Save first user message to DB
-        #user_msg = chat_service.record_user_message(db, issue, user_content)
-        #if attachment_ids:
-        #    attachment_service.link_attachments_to_message(
-        #        db, message=user_msg, attachment_ids=attachment_ids, user_id=user.id
-        #    )
-        #    db.refresh(user_msg)
-        #await websocket.send_text(json.dumps({
-        #    "type": "user_message_saved",
-        #    "message": _message_dto(user_msg),
-        #}))
         initial_state = {
             "user_query": "",
-            "prior_history": "",
+            "prior_history": prior_msgs,
             "chat_history": [],
             "is_first_message": True,
             "needs_clarification": False,
@@ -133,74 +111,107 @@ async def websocket_endpoint(
             "ticket_content": "",
             "final_user_response": "",
         }
-        # Inject first message into initial state so the workflow uses it directly
-        # initial_state["user_query"] = user_content
-        if (chat_id):
-            new_thread_id = chat_id
-        else:
-            new_thread_id = issue.id
+
+        new_thread_id = chat_id if chat_id else issue.id
         config = {"configurable": {"thread_id": new_thread_id}}
         should_run = True
         user_input = None
 
         async with _get_checkpointer() as checkpointer:
-            workflow = build_workflow(checkpointer=checkpointer, graph_config=config, chat_model_input=chat_model)
+            workflow = build_workflow(
+                checkpointer=checkpointer,
+                graph_config=config,
+                # chat_model_input=chat_model,
+                db=db,
+                issue=issue,
+                user_id=user.id,
+            )
             while should_run:
-                if user_input: 
-                    graph_input = user_input
-                else:
-                    graph_input = initial_state
+                graph_input = user_input if user_input else initial_state
 
                 async for chunk in workflow.workflow.astream(
                     graph_input,
                     config=config,
                     version="v2",
-                    debug=True
-                    ):
-                        if "__interrupt__" in chunk.get("data", {}):
-                            # Send interrupt signal to enable user input on client
-                            await websocket.send_text(json.dumps({
-                                "type": "interrupt",
-                                "token": str(chunk["data"]["__interrupt__"][-1].value),
-                            }))
-                            
-                            # Wait for user response
-                            user_response = await websocket.receive_text()
-                            user_input = Command(resume=user_response)
-                        elif "end_node" in chunk.get("data", {}):
-                            # Send final message
-                            await websocket.send_text(json.dumps({
-                                "type": "message",
-                                "token": str(chunk["data"])
-                            }))
-                            should_run = False
-                        elif "engagement_with_user" in chunk.get("data", {}):
-                            await websocket.send_text(json.dumps({
-                                "type": "message",
-                                "token": str(chunk["data"]["engagement_with_user"]["engagement_response"]),
-                                "token_type": chunk["type"]
-                            }))
-                        elif "formulate_ticket_content" in chunk.get("data", {}):
-                            await websocket.send_text(json.dumps({
-                                "type": "message",
-                                "token": str(chunk["data"]["formulate_ticket_content"]["ticket_summary"]),
-                                "token_type": chunk["type"]
-                            }))
+                    debug=True,
+                ):
+                    if "__interrupt__" in chunk.get("data", {}):
+                        interrupt_val = chunk["data"]["__interrupt__"][-1].value
+                        if isinstance(interrupt_val, dict):
+                            interrupt_content = interrupt_val.get("content", "")
+                            interrupt_options = interrupt_val.get("options", [])
                         else:
-                            #await websocket.send_text(json.dumps({
-                            #    "type": "message",
-                            #    "token": str(chunk["data"]),
-                            #    "token_type": chunk["type"]
-                            #}))
-                            pass
+                            interrupt_content = str(interrupt_val)
+                            interrupt_options = []
+                        await websocket.send_text(json.dumps({
+                            "type": "options",
+                            "content": interrupt_content,
+                            "options": interrupt_options,
+                        }))
+
+                        raw_response = await websocket.receive_text()
+                        try:
+                            parsed = json.loads(raw_response)
+                            if isinstance(parsed, dict):
+                                resp_content = parsed.get("content", "") or ""
+                                resp_att_ids = parsed.get("attachmentIds", []) or []
+                            else:
+                                resp_content = raw_response.strip()
+                                resp_att_ids = []
+                        except json.JSONDecodeError:
+                            resp_content = raw_response.strip()
+                            resp_att_ids = []
+                        if resp_content:
+                            resp_msg = chat_service.record_user_message(db, issue, resp_content)
+                            if resp_att_ids:
+                                attachment_service.link_attachments_to_message(
+                                    db, message=resp_msg, attachment_ids=resp_att_ids, user_id=user.id
+                                )
+                        user_input = Command(resume=resp_content)
+
+                    elif "end_node" in chunk.get("data", {}):
+                        summary = chunk["data"]["end_node"].get("final_user_response", "")
+                        chat_service.close_issue(db, issue, summary=summary or None)
+                        should_run = False
+
+                    elif "engagement_with_user" in chunk.get("data", {}):
+                        node_data = chunk["data"]["engagement_with_user"]
+                        # Skip when needs_clarification=True: the question will surface
+                        # via the next interrupt instead of being shown twice.
+                        if node_data.get("needs_clarification") is not True:
+                            ai_content = str(node_data.get("engagement_response") or "").strip()
+                            if ai_content:
+                                chat_service.record_ai_message(db, issue, ai_content, AI_ANSWER_NORMAL)
+                                await websocket.send_text(json.dumps({
+                                    "type": "message",
+                                    "content": ai_content,
+                                }))
+
+                    elif "formulate_ticket_content" in chunk.get("data", {}):
+                        ticket_content = str(chunk["data"]["formulate_ticket_content"].get("ticket_summary") or "").strip()
+                        if ticket_content:
+                            chat_service.record_ai_message(db, issue, ticket_content, AI_ANSWER_NORMAL)
+                            await websocket.send_text(json.dumps({
+                                "type": "message",
+                                "content": ticket_content,
+                            }))
+
+                    elif "generate_ticket_created_response" in chunk.get("data", {}):
+                        confirmation = chunk["data"]["generate_ticket_created_response"].get("final_user_response", "").strip()
+                        if confirmation:
+                            chat_service.record_ai_message(db, issue, confirmation, AI_ANSWER_NORMAL)
+                            await websocket.send_text(json.dumps({
+                                "type": "message",
+                                "content": confirmation,
+                            }))
 
                 if "end_node" in chunk.get("data", {}):
-                    should_run = False      
+                    should_run = False
             
 
     except WebSocketDisconnect:
         print("[ws] Client disconnected")
-    except Exception as exc:
+    except Exception:
         import traceback
         traceback.print_exc()
         try:
