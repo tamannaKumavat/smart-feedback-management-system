@@ -199,6 +199,8 @@ CREATE A SUPPORT TICKET:
    - Any relevant technical details or context from the conversation
    - User's technical level/background (if apparent)
 
+3. **Next Steps**: Provide 2-3 concrete recommended actions the support agent should take to resolve this issue.
+
 Ensure the ticket is thorough enough that a support agent can begin work without requesting clarification.
 """
 

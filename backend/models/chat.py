@@ -30,6 +30,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db import Base
+from pgvector.sqlalchemy import Vector
 
 
 def _new_uuid() -> str:
@@ -68,6 +69,9 @@ TICKET_STATUS_IN_PROGRESS = "In Progress"
 TICKET_STATUS_RESOLVED = "Resolved"
 TICKET_STATUS_OPEN = "Open"
 TICKET_STATUSES = {TICKET_STATUS_NEW, TICKET_STATUS_IN_PROGRESS, TICKET_STATUS_RESOLVED}
+
+# Dimension of ibm/granite-embedding-278m-multilingual
+EMBEDDING_DIM = 768
 
 
 class Issue(Base):
@@ -176,6 +180,7 @@ class Ticket(Base):
     )
 
     summary: Mapped[str] = mapped_column(Text, nullable=False)
+    summary_embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     issue_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     priority: Mapped[str | None] = mapped_column(String(16), nullable=True)

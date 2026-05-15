@@ -115,18 +115,27 @@ def _build_mock_chat_model():
 
         def with_structured_output(self, schema, **kwargs):
             def build_default(_input):
+                init_kwargs = {}
+                for field_name, field_info in schema.model_fields.items():
+                    ann = field_info.annotation
+                    if ann is bool and field_info.default is True:
+                        # Flip True-defaulted bools to False so mock proceeds through the flow
+                        init_kwargs[field_name] = False
+                    elif field_info.is_required():
+                        if ann is str:
+                            init_kwargs[field_name] = "[MOCK]"
+                        elif ann is int:
+                            init_kwargs[field_name] = 1
+                        elif hasattr(ann, "__members__"):
+                            init_kwargs[field_name] = list(ann)[0]
+                        elif hasattr(ann, "__args__"):
+                            init_kwargs[field_name] = ann.__args__[0]
+                        else:
+                            init_kwargs[field_name] = None
                 try:
-                    return schema()
-                except Exception:
-                    init_kwargs = {}
-                    for field_name, field_info in schema.model_fields.items():
-                        if field_info.is_required():
-                            ann = field_info.annotation
-                            if hasattr(ann, "__members__"):
-                                init_kwargs[field_name] = list(ann)[0]
-                            elif hasattr(ann, "__args__"):
-                                init_kwargs[field_name] = ann.__args__[0]
                     return schema(**init_kwargs)
+                except Exception:
+                    return schema()
 
             return RunnableLambda(build_default)
 
@@ -261,9 +270,10 @@ class SmartFeedbackWorkflow:
             {
                 HumanAssessment.OK: "update_ticket",
                 HumanAssessment.ADD_ADDITIONAL_CONTENT: "add_additional_information_to_ticket",
+                HumanAssessment.REDO_TICKET: "triage_request",
             },
         )
-        workflow.add_edge("add_additional_information_to_ticket", "update_ticket")
+        workflow.add_edge("add_additional_information_to_ticket", "human_ticket_assessment")
         workflow.add_edge("update_ticket", "generate_ticket_created_response")
         workflow.add_edge("generate_ticket_created_response", "add_ticket_to_jira")
         workflow.add_edge("add_ticket_to_jira", "generate_chat_summary")
@@ -286,14 +296,13 @@ class SmartFeedbackWorkflow:
         return "proceed"
 
     def _route_rag_results(self, state: SmartFeedbackState) -> str:
-        # Check RAG sufficiency
         results = state.get("rag_results", [])
-        rag_sufficient = (
-            bool(results)
-            and max((r.get("score", 0.0) for r in results), default=0.0)
-            >= RELEVANCE_THRESHOLD
-        )
-        return "respond" if rag_sufficient else "triage"
+        if not results:
+            return "triage"
+        # Keyword matches always count as sufficient (any match found is relevant)
+        has_keyword_match = any(r.get("matched_on") == "keyword" for r in results)
+        has_vector_match = max((r.get("score", 0.0) for r in results), default=0.0) >= RELEVANCE_THRESHOLD
+        return "respond" if (has_keyword_match or has_vector_match) else "triage"
 
     def rag_result_user_assessment(self, state: SmartFeedbackState):
         interrupt_data: InterruptData = {
@@ -403,11 +412,14 @@ class SmartFeedbackWorkflow:
     def human_ticket_assessment(self, state: SmartFeedbackState) -> SmartFeedbackState:
         interrupt_data: InterruptData = {
             "content": "Does this ticket look correct?",
-            "options": ["yes", "no"],
+            "options": ["ok", "redo", "additional"],
         }
         assessment = interrupt(interrupt_data)
-        if isinstance(assessment, str) and assessment.strip().lower() == "yes":
+        val = assessment.strip().lower() if isinstance(assessment, str) else ""
+        if val == "ok":
             return {"human_assessment": HumanAssessment.OK}
+        if val == "redo":
+            return {"human_assessment": HumanAssessment.REDO_TICKET}
         return {"human_assessment": HumanAssessment.ADD_ADDITIONAL_CONTENT}
 
     def add_additional_information_to_ticket(self, state: SmartFeedbackState) -> str:
@@ -417,7 +429,7 @@ class SmartFeedbackWorkflow:
         }
         user_comment = interrupt(interrupt_data)
         final_ticket_content = (
-            state.get("ticket_summary") + f"\nUSER COMMENT:\n{user_comment}"
+            state.get("ticket_summary") + f"\n\n**User Comment:**\n{user_comment}"
         )
         return {
             "ticket_summary": final_ticket_content,
@@ -505,6 +517,27 @@ class SmartFeedbackWorkflow:
             "chat_history": [ticket_content],
         }
 
+    @staticmethod
+    def _parse_ticket_sections(ticket_summary: str) -> dict:
+        import re
+
+        def extract(pattern):
+            m = re.search(pattern, ticket_summary, re.DOTALL | re.IGNORECASE)
+            return m.group(1).strip() if m else None
+
+        title        = extract(r"\*\*Title\*\*[:\s]+(.*?)(?=\n+\*\*|\Z)")
+        description  = extract(r"\*\*Description\*\*[:\s]+(.*?)(?=\n+\*\*Severity|\n+\*\*Next Steps|\n+\*\*User Comment|\Z)")
+        next_steps   = extract(r"\*\*Next Steps\*\*[:\s]+(.*?)(?=\n+\*\*User Comment|\Z)")
+        user_comment = extract(r"\*\*User Comment\*\*[:\s]+(.*?)(?:\Z)")
+
+        desc_parts = [p for p in [description, f"**User Comment:**\n{user_comment}" if user_comment else None] if p]
+
+        return {
+            "title":             title,
+            "description":       "\n\n".join(desc_parts) if desc_parts else None,
+            "recommended_action": next_steps,
+        }
+
     def update_ticket(self, state: SmartFeedbackState) -> dict:
         from services import chat_service
 
@@ -512,18 +545,28 @@ class SmartFeedbackWorkflow:
         assessments = state.get("incident_assessment") or []
         assessment = assessments[-1] if assessments else None
 
+        analysis_result = state.get("analysis_agent_result")
+        issue_type = analysis_result.issue_type.value if analysis_result else None
+        ticket_summary = state.get("ticket_summary") or ""
+        sections = self._parse_ticket_sections(ticket_summary)
+
         if assessment is not None:
             priority = _SEVERITY_MAP.get(assessment.severity, str(assessment.severity))
             ticket_fields = {
-                "summary": state.get("ticket_summary") or "",
-                "description": assessment.user_issue,
-                "issue_type": assessment.user_issue,
+                "summary": sections["title"] or assessment.user_issue,
+                "description": sections["description"],
+                "issue_type": issue_type,
                 "priority": priority,
-                "team": str(assessment.support_team) or None,
-                "recommended_action": assessment.recommended_action,
+                "team": assessment.support_team.value,
+                "recommended_action": sections["recommended_action"] or assessment.recommended_action,
             }
         else:
-            ticket_fields = {"summary": state.get("ticket_summary") or ""}
+            ticket_fields = {
+                "summary": sections["title"] or ticket_summary,
+                "description": sections["description"],
+                "issue_type": issue_type,
+                "recommended_action": sections["recommended_action"],
+            }
 
         if self.db is not None and self.issue is not None and self.user_id is not None:
             ticket = chat_service.create_ticket_from_triage(

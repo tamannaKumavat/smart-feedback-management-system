@@ -81,6 +81,14 @@ async def websocket_endpoint(
         try:
             if chat_id:
                 issue = chat_service.get_chat_for_user(db, chat_id, user.id)
+                # Auto-resume if the issue is still draft (race between
+                # markChatAsDraft cleanup and WS reconnect, or slow HTTP resume)
+                from models.chat import ISSUE_STATUS_DRAFT, ISSUE_STATUS_CLOSED
+                if issue.status == ISSUE_STATUS_CLOSED:
+                    await websocket.close(code=4003)
+                    return
+                if issue.status == ISSUE_STATUS_DRAFT:
+                    issue = chat_service.resume_draft(db, chat_id, user.id)
             else:
                 issue = chat_service.create_chat(db, user.id)
         except Exception:
@@ -143,6 +151,8 @@ async def websocket_endpoint(
                         else:
                             interrupt_content = str(interrupt_val)
                             interrupt_options = []
+                        if interrupt_content:
+                            chat_service.record_ai_message(db, issue, interrupt_content, AI_ANSWER_NORMAL)
                         await websocket.send_text(json.dumps({
                             "type": "options",
                             "content": interrupt_content,
@@ -214,10 +224,9 @@ async def websocket_endpoint(
     except Exception:
         import traceback
         traceback.print_exc()
+    finally:
+        db.close()
         try:
             await websocket.close()
         except Exception:
             pass
-    finally:
-        db.close()
-        await websocket.close()
