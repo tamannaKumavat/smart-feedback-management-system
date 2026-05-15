@@ -54,10 +54,8 @@ export default function ClientDrafts() {
       <section className="mx-auto w-full max-w-[920px]">
         <header className="mb-4 flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-[20px] font-semibold leading-tight text-[#0f172a]">
-              Draft tickets
-            </h1>
-            <p className="mt-1 text-[13px] text-slate-500">
+            <h1 className="client-page-title">Draft tickets</h1>
+            <p className="client-page-subtitle">
               Conversations you started but didn’t finalize. Resume any to pick
               up where you left off.
             </p>
@@ -65,53 +63,53 @@ export default function ClientDrafts() {
           <button
             type="button"
             onClick={() => navigate("/client/create-ticket")}
-            className="inline-flex items-center gap-2 rounded-full bg-[#020c3d] px-4 py-2 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#0a1a5c]"
+            className="client-btn-primary"
           >
             <FiPlus className="text-[14px]" />
             New chat
           </button>
         </header>
 
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="client-card overflow-hidden">
           {loading ? (
-            <div className="flex items-center justify-center py-16 text-[13px] text-slate-500">
+            <div className="flex items-center justify-center py-16 text-[13px] text-content-muted">
               Loading drafts…
             </div>
           ) : drafts.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+              <div className="client-empty-icon h-12 w-12">
                 <FiClock className="text-[20px]" />
               </div>
-              <p className="text-[14px] font-semibold text-slate-700">
+              <p className="text-[14px] font-semibold text-content">
                 No drafts yet
               </p>
-              <p className="max-w-[320px] text-[12px] text-slate-500">
+              <p className="max-w-[320px] text-[12px] text-content-muted">
                 When you leave a chat before confirming the ticket, it’ll show
                 up here so you can finish it later.
               </p>
             </div>
           ) : (
-            <ul className="divide-y divide-slate-200">
+            <ul className="client-divide divide-y">
               {drafts.map((d) => (
                 <li
                   key={d.id}
-                  className="flex items-center justify-between gap-4 px-4 py-3 transition hover:bg-slate-50 sm:px-5"
+                  className="client-row-hover flex items-center justify-between gap-4 px-4 py-3 sm:px-5"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-[14px] font-semibold text-slate-800">
+                    <p className="truncate text-[14px] font-semibold text-content">
                       Draft chat
-                      <span className="ml-2 text-[11px] font-normal uppercase tracking-wide text-slate-400">
+                      <span className="ml-2 text-[11px] font-normal uppercase tracking-wide text-content-muted">
                         {d.id.slice(0, 8)}
                       </span>
                     </p>
-                    <p className="mt-0.5 text-[12px] text-slate-500">
+                    <p className="mt-0.5 text-[12px] text-content-muted">
                       Last activity {formatDateTime(d.updatedAt)}
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => resume(d.id)}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-[12px] font-semibold text-slate-700 transition hover:bg-slate-100"
+                    className="client-btn-secondary shrink-0 !py-1.5 !text-[12px]"
                   >
                     Resume
                     <FiArrowRight className="text-[13px]" />

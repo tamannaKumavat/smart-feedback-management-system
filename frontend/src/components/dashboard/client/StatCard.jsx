@@ -1,17 +1,20 @@
+import { motion } from "framer-motion";
+
 export default function StatCard({
   title,
   value,
   trend,
   icon: Icon,
-  gradientClassName = "bg-gradient-to-br from-[#EEF4FF] via-[#F8FAFF] to-white",
-  accentClassName = "text-[#2563EB]",
+  themeKey = "indigo",
+  accentClassName = "text-[var(--client-accent)]",
 }) {
   return (
-    <article
-      className={`flex min-h-0 min-w-0 w-full flex-col rounded-xl border border-[#F3F4F6] p-3 shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05),0_2px_4px_-2px_rgba(0,0,0,0.04)] sm:p-4 ${gradientClassName}`}
+    <motion.article
+      whileHover={{ y: -3, transition: { duration: 0.2 } }}
+      className={`client-stat-card client-stat-card--${themeKey} flex min-h-0 min-w-0 w-full flex-col rounded-xl border p-3 sm:p-4`}
     >
       <div className="flex items-center gap-2 sm:gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/90 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-white/60 backdrop-blur-[2px] sm:h-10 sm:w-10">
+        <div className="client-stat-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface-card ring-1 ring-border-subtle backdrop-blur-[2px] sm:h-10 sm:w-10">
           {Icon ? (
             <Icon
               className={`text-[18px] sm:text-[20px] ${accentClassName}`}
@@ -20,12 +23,12 @@ export default function StatCard({
             />
           ) : null}
         </div>
-        <span className="min-w-0 text-[12px] font-medium leading-snug text-[#64748B] sm:text-[13px]">
+        <span className="min-w-0 text-[12px] font-medium leading-snug text-content-muted sm:text-[13px]">
           {title}
         </span>
       </div>
       <div className="mt-3 flex items-end justify-between gap-2 sm:mt-4">
-        <p className="text-xl font-bold leading-none tracking-tight text-[#111827] sm:text-2xl">
+        <p className="text-xl font-bold leading-none tracking-tight text-dashboard-heading sm:text-2xl">
           {value}
         </p>
         {trend ? (
@@ -36,6 +39,6 @@ export default function StatCard({
           </span>
         ) : null}
       </div>
-    </article>
+    </motion.article>
   );
 }

@@ -1,13 +1,15 @@
-import { FiBell, FiSearch, FiSettings, FiShare2 } from "react-icons/fi";
+import { FiBell, FiMoon, FiSearch, FiSettings, FiShare2, FiSun } from "react-icons/fi";
 import { Link } from "react-router-dom";
 import WebLogo from "./WebLogo.jsx";
 import { getSession } from "../lib/session.js";
 
-function IconButton({ children, hasDot = false }) {
+function IconButton({ children, hasDot = false, className = "", onClick, ariaLabel }) {
   return (
     <button
       type="button"
-      className="relative inline-flex h-9 w-9 items-center justify-center rounded-full bg-surface-card text-content-muted hover:bg-surface-page hover:text-content"
+      onClick={onClick}
+      aria-label={ariaLabel}
+      className={`relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-card text-content-muted transition hover:bg-surface-muted hover:text-content ${className}`}
     >
       {children}
       {hasDot ? (
@@ -17,9 +19,39 @@ function IconButton({ children, hasDot = false }) {
   );
 }
 
-export default function Topbar({ mode }) {
+function ThemeToggleButton({ isDark, onToggle }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      className="client-theme-toggle inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[12px] font-medium shadow-sm transition"
+    >
+      {isDark ? (
+        <>
+          <FiSun className="text-[16px]" aria-hidden />
+          <span>Light</span>
+        </>
+      ) : (
+        <>
+          <FiMoon className="text-[16px]" aria-hidden />
+          <span>Dark</span>
+        </>
+      )}
+    </button>
+  );
+}
+
+export default function Topbar({
+  mode,
+  showThemeToggle = false,
+  isDark = false,
+  onToggleTheme,
+}) {
   const session = getSession();
   const user = session?.user;
+  const isClient = mode === "client";
   const fullName = String(user?.fullName || "").trim();
   const email = String(user?.email || "").trim();
   const initialsFromName = fullName
@@ -34,9 +66,15 @@ export default function Topbar({ mode }) {
     initialsFromName || email.slice(0, 2).toUpperCase() || "AD";
 
   return (
-    <header className="sticky top-0 z-20 bg-white  backdrop-blur">
-      <div className="mx-auto flex h-16 items-center justify-between gap-4 px-4 sm:px-6">
-        <Link to="/" className="inline-flex items-center gap-3">
+    <header
+      className={`sticky top-0 z-20 backdrop-blur ${
+        isClient
+          ? `client-topbar ${isDark ? "border-b border-border-subtle bg-surface-card/95" : "border-0"}`
+          : "border-b border-transparent bg-white"
+      }`}
+    >
+      <div className="mx-auto flex h-16 items-center justify-between gap-2 px-4 sm:gap-4 sm:px-6">
+        <Link to="/" className="inline-flex min-w-0 shrink items-center gap-3">
           <WebLogo className="h-8 w-auto sm:h-10" />
           <span className="hidden text-lg font-semibold text-content sm:inline">
             {mode === "admin" ? "Admin Portal" : "Client Portal"}
@@ -54,17 +92,20 @@ export default function Topbar({ mode }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-1 sm:gap-2">
-          <IconButton>
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          {showThemeToggle && onToggleTheme ? (
+            <ThemeToggleButton isDark={isDark} onToggle={onToggleTheme} />
+          ) : null}
+          <IconButton ariaLabel="Settings">
             <FiSettings size={16} />
           </IconButton>
-          <IconButton hasDot>
+          <IconButton hasDot ariaLabel="Notifications">
             <FiBell size={16} />
           </IconButton>
-          <IconButton>
+          <IconButton ariaLabel="Share">
             <FiShare2 size={16} />
           </IconButton>
-          <span className="ml-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-brand-gray text-captionsmall font-semibold text-white">
+          <span className="ml-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-gray text-captionsmall font-semibold text-white">
             {avatarText}
           </span>
         </div>

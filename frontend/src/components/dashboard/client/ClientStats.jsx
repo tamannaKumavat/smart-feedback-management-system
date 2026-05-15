@@ -1,38 +1,42 @@
-import { FiCheckCircle, FiClipboard, FiClock, FiZap } from "react-icons/fi";
+import { motion } from "framer-motion";
+import { FiCheckCircle, FiClipboard, FiClock, FiFileText } from "react-icons/fi";
+import { staggerContainer, staggerItem } from "../../../lib/motion.js";
 import StatCard from "./StatCard.jsx";
 
 const ICONS = {
   clipboard: FiClipboard,
   clock: FiClock,
   checkCircle: FiCheckCircle,
-  zap: FiZap,
+  fileText: FiFileText,
 };
 
 const STAT_CARD_THEMES = [
   {
-    gradientClassName:
-      "bg-gradient-to-br from-indigo-50 via-violet-100/40 to-white",
+    themeKey: "indigo",
     accentClassName: "text-indigo-600",
   },
   {
-    gradientClassName:
-      "bg-gradient-to-br from-amber-50 via-orange-100/35 to-white",
-    accentClassName: "text-amber-700",
+    themeKey: "amber",
+    accentClassName: "text-amber-600",
   },
   {
-    gradientClassName:
-      "bg-gradient-to-br from-emerald-50 via-teal-100/40 to-white",
-    accentClassName: "text-emerald-700",
+    themeKey: "emerald",
+    accentClassName: "text-emerald-600",
   },
   {
-    gradientClassName: "bg-gradient-to-br from-sky-50 via-cyan-100/35 to-white",
-    accentClassName: "text-sky-700",
+    themeKey: "sky",
+    accentClassName: "text-sky-600",
   },
 ];
 
 export default function ClientStats({ stats = [] }) {
   return (
-    <div className="grid w-full min-w-0 shrink-0 grid-cols-1 gap-4 min-[480px]:grid-cols-2 xl:grid-cols-4">
+    <motion.div
+      className="grid w-full min-w-0 shrink-0 grid-cols-1 gap-4 min-[480px]:grid-cols-2 xl:grid-cols-4"
+      variants={staggerContainer}
+      initial="initial"
+      animate="animate"
+    >
       {stats.map((item, index) => {
         const Icon = ICONS[item.iconKey] ?? FiClipboard;
         const percent =
@@ -44,17 +48,18 @@ export default function ClientStats({ stats = [] }) {
         const theme = STAT_CARD_THEMES[index % STAT_CARD_THEMES.length];
 
         return (
-          <StatCard
-            key={item.id}
-            title={item.title}
-            value={item.value}
-            trend={trendLine}
-            icon={Icon}
-            gradientClassName={theme.gradientClassName}
-            accentClassName={theme.accentClassName}
-          />
+          <motion.div key={item.id} variants={staggerItem}>
+            <StatCard
+              title={item.title}
+              value={item.value}
+              trend={trendLine}
+              icon={Icon}
+              themeKey={theme.themeKey}
+              accentClassName={theme.accentClassName}
+            />
+          </motion.div>
         );
       })}
-    </div>
+    </motion.div>
   );
 }

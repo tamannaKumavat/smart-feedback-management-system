@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaRegShareFromSquare } from "react-icons/fa6";
@@ -13,6 +14,7 @@ import {
   uploadAttachment,
 } from "../../lib/chatApi.js";
 import { getToken } from "../../lib/session.js";
+import { fadeInUp, messageBubble, scaleIn } from "../../lib/motion.js";
 import { showError, showSuccess } from "../../lib/toast.js";
 
 const MAX_UPLOAD_MB = 10;
@@ -33,16 +35,17 @@ function formatBytes(n) {
 const userAvatar = "/user.png";
 const teamAvatar = "/ruag-single.png";
 
-const bubbleUser =
-  "rounded-[18px] bg-[#E7F3FF] px-4 py-2.5 text-[13px] leading-relaxed text-[#1e293b] shadow-sm ring-1 ring-sky-200/40";
-const bubbleTeam =
-  "rounded-[18px] bg-white px-4 py-2.5 text-[13px] leading-relaxed text-[#1e293b] shadow-sm ring-1 ring-slate-200/90";
-const btnYes =
-  "rounded-full bg-[#3E8E91] px-4 py-2 text-[12px] font-semibold text-white shadow-sm transition hover:brightness-[0.95]";
-const btnNo =
-  "rounded-full border border-slate-200 bg-white px-4 py-2 text-[12px] font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50";
+const SUGGESTED_PROMPTS = [
+  "I can't log in to my account",
+  "I need help drafting a support ticket",
+  "Something is broken in production",
+  "Can you summarize my issue for me?",
+];
+
+const btnYes = "client-btn-option";
+const btnNo = "client-btn-option-muted";
 const scrollPretty =
-  "[scrollbar-width:thin] [scrollbar-color:rgb(203_213_225/0.65)_transparent] [&::-webkit-scrollbar]:w-[6px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300/40 hover:[&::-webkit-scrollbar-thumb]:bg-slate-400/50";
+  "[scrollbar-width:thin] [scrollbar-color:rgb(100_116_139/0.45)_transparent] [&::-webkit-scrollbar]:w-[6px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border-input/60 hover:[&::-webkit-scrollbar-thumb]:bg-content-muted/50";
 
 function formatTime(iso) {
   if (!iso) return "";
@@ -56,6 +59,27 @@ function formatTime(iso) {
   }
 }
 
+function formatOptionLabel(option) {
+  if (!option) return "";
+  if (option === "Ok") return "Ok";
+  return option
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function createLocalMessage({ sender, content, chatId, extra = {} }) {
+  return {
+    id: `${sender}-${Date.now()}`,
+    chatId,
+    sender,
+    content,
+    aiAnswerType: "normal",
+    createdAt: new Date().toISOString(),
+    attachments: [],
+    ...extra,
+  };
+}
+
 function AttachmentChip({ attachment }) {
   const href = attachmentDownloadUrl(attachment.id);
   const isImage = attachment.mimeType?.startsWith("image/");
@@ -65,7 +89,7 @@ function AttachmentChip({ attachment }) {
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className="block max-w-[260px] overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
+        className="block max-w-[260px] overflow-hidden rounded-lg border border-border-subtle bg-surface-muted"
       >
         <img
           src={href}
@@ -73,7 +97,7 @@ function AttachmentChip({ attachment }) {
           className="block max-h-48 w-full object-cover"
           loading="lazy"
         />
-        <div className="flex items-center justify-between gap-2 px-2 py-1 text-[11px] text-slate-500">
+        <div className="flex items-center justify-between gap-2 px-2 py-1 text-[11px] text-content-muted">
           <span className="truncate">{attachment.filename}</span>
           <span className="shrink-0">{formatBytes(attachment.sizeBytes)}</span>
         </div>
@@ -85,11 +109,11 @@ function AttachmentChip({ attachment }) {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-100"
+      className="inline-flex max-w-full items-center gap-2 rounded-lg border border-border-subtle bg-surface-muted px-3 py-1.5 text-[12px] text-content hover:bg-surface-page"
     >
       <FiPaperclip className="h-3.5 w-3.5 shrink-0" aria-hidden />
       <span className="truncate font-medium">{attachment.filename}</span>
-      <span className="shrink-0 text-slate-400">
+      <span className="shrink-0 text-content-muted">
         {formatBytes(attachment.sizeBytes)}
       </span>
     </a>
@@ -98,15 +122,46 @@ function AttachmentChip({ attachment }) {
 
 function Avatar({ src, label }) {
   return (
-    <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-[#d8dce4] bg-white">
+    <div className="client-chat-avatar">
       {src ? (
         <img src={src} alt={label} className="h-full w-full object-cover" />
       ) : (
-        <div className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-[#6b7280]">
+        <div className="flex h-full w-full items-center justify-center text-[12px] font-semibold text-content-muted">
           {label?.[0] ?? "?"}
         </div>
       )}
     </div>
+  );
+}
+
+function formatChatStatus(status) {
+  return String(status || "active").replace(/_/g, " ");
+}
+
+function TypingIndicator() {
+  return (
+    <motion.div
+      className="client-chat-row client-chat-row--team flex w-full"
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      <div className="client-assistant-block">
+        <Avatar src={teamAvatar} label="Ruag Team" />
+        <div className="client-assistant-col">
+          <p className="client-chat-meta">
+            <strong>Ruag Team</strong>
+          </p>
+          <div className="client-typing-bubble mt-2">
+            <span className="client-typing-dots inline-flex gap-1.5">
+              <span />
+              <span />
+              <span />
+            </span>
+          </div>
+        </div>
+      </div>
+    </motion.div>
   );
 }
 
@@ -123,8 +178,10 @@ export default function ClientCreateTicket() {
   const [messageInput, setMessageInput] = useState("");
   const [attachedFile, setAttachedFile] = useState(null);
   const [confirmationDone, setConfirmationDone] = useState(false);
+  const [pendingOptions, setPendingOptions] = useState(null);
   const [isFirstMessage, setIsFirstMessage] = useState(true);
   const fileInputRef = useRef(null);
+  const messageInputRef = useRef(null);
   const [sending, setSending] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [pendingFile, setPendingFile] = useState(null);
@@ -210,7 +267,24 @@ export default function ClientCreateTicket() {
     return null;
   }, [messages]);
 
+  const latestAiMessageId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].sender === "ai") return messages[i].id;
+    }
+    return null;
+  }, [messages]);
+
+  const conversationTitle = useMemo(() => {
+    if (!chat) return "New conversation";
+    const summary = chat.summary?.trim();
+    if (summary) {
+      return summary.length > 52 ? `${summary.slice(0, 52)}…` : summary;
+    }
+    return "Support conversation";
+  }, [chat]);
+
   const awaitingConfirmation = chat?.status === "waiting_confirmation";
+  const awaitingOptionChoice = (pendingOptions?.options?.length ?? 0) > 0;
   const chatClosed = chat?.status === "closed";
 
   const ensureChat = useCallback(async () => {
@@ -220,34 +294,84 @@ export default function ClientCreateTicket() {
     return created.chat;
   }, [chat]);
 
+  function appendAiMessage(content, extra = {}) {
+    if (!content) return;
+    setMessages((prev) => [
+      ...prev,
+      createLocalMessage({
+        sender: "ai",
+        content,
+        chatId: chatRef.current?.id,
+        extra,
+      }),
+    ]);
+  }
+
   function handleWsMessage(data) {
     if (data.type === "token") {
       const newContent = (streamingContentRef.current ?? "") + data.token;
       streamingContentRef.current = newContent;
       setStreamingDraft({ id: "streaming", content: newContent });
-    } else if (data.type === "interrupt") {
-      const committed = streamingContentRef.current;
+      return;
+    }
+
+    if (data.type === "message") {
       streamingContentRef.current = "";
       setStreamingDraft(null);
-      if (committed) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `ai-${Date.now()}`,
-            chatId: chatRef.current?.id,
-            sender: "ai",
-            content: committed,
-            aiAnswerType: "normal",
-            createdAt: new Date().toISOString(),
-          },
-        ]);
+      if (data.message) {
+        setMessages((prev) => [...prev, data.message]);
+      } else {
+        appendAiMessage(data.content ?? "");
       }
       setSending(false);
-    } else if (data.type === "message") {
-      setMessages((prev) => [...prev, data.message]);
+      return;
+    }
+
+    if (data.type === "options") {
+      const content = data.content ?? "";
+      const options = Array.isArray(data.options) ? data.options : [];
       streamingContentRef.current = "";
       setStreamingDraft(null);
+
+      if (content) {
+        setMessages((prev) => {
+          const lastAi = [...prev].reverse().find((m) => m.sender === "ai");
+          if (lastAi?.content === content) return prev;
+          return [
+            ...prev,
+            createLocalMessage({
+              sender: "ai",
+              content,
+              chatId: chatRef.current?.id,
+            }),
+          ];
+        });
+      }
+
+      if (options.length > 0) {
+        setPendingOptions({ content, options });
+      } else {
+        setPendingOptions(null);
+      }
       setSending(false);
+      return;
+    }
+
+    if (data.type === "ticket_created") {
+      streamingContentRef.current = "";
+      setStreamingDraft(null);
+      setPendingOptions(null);
+      appendAiMessage(data.content ?? "Your ticket has been created.", {
+        ticketId: data.ticket_id ?? data.ticketId ?? null,
+        aiAnswerType: "ticket_created",
+      });
+      showSuccess("Ticket created");
+      setSending(false);
+      return;
+    }
+
+    if (data.type === "user_message_saved" && data.message) {
+      return;
     }
   }
 
@@ -328,6 +452,10 @@ export default function ClientCreateTicket() {
       showError("Please confirm or reject the summary above first.");
       return;
     }
+    if (awaitingOptionChoice) {
+      showError("Please choose one of the options above to continue.");
+      return;
+    }
 
     setSending(true);
     const contentToSend = trimmed || `Attached: ${pendingFile?.name ?? "file"}`;
@@ -391,6 +519,50 @@ export default function ClientCreateTicket() {
     }
   }
 
+  async function handleOptionChoice(option) {
+    if (!option || sending || !pendingOptions) return;
+    if (chatClosed) {
+      showError("This chat is closed. Start a new one.");
+      return;
+    }
+
+    setPendingOptions(null);
+    setSending(true);
+
+    let activeChat = chat;
+    try {
+      activeChat = activeChat ?? (await ensureChat());
+    } catch (err) {
+      setSending(false);
+      showError(err, "Could not start chat");
+      return;
+    }
+
+    setMessages((prev) => [
+      ...prev,
+      createLocalMessage({
+        sender: "user",
+        content: option,
+        chatId: activeChat.id,
+      }),
+    ]);
+    streamingContentRef.current = "";
+    setStreamingDraft({ id: "streaming", content: "" });
+
+    const wsPayload = JSON.stringify({
+      type: "option_response",
+      content: option,
+    });
+
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(wsPayload);
+    } else {
+      showError("Connection lost. Please try again.");
+      setSending(false);
+      setStreamingDraft(null);
+    }
+  }
+
   async function handleConfirm(accepted) {
     if (!chat || confirming) return;
     setConfirming(true);
@@ -443,6 +615,7 @@ export default function ClientCreateTicket() {
     setStreamingDraft(null);
     setMessageInput("");
     setAttachedFile(null);
+    setPendingOptions(null);
     setIsFirstMessage(true);
     if (resumeId) setSearchParams({}, { replace: true });
     connectWS(null);
@@ -451,121 +624,185 @@ export default function ClientCreateTicket() {
   function handleShare() {
     const url = typeof window !== "undefined" ? window.location.href : "";
     if (navigator.share) {
-      navigator.share({ title: "Create Ticket", url }).catch(() => {});
+      navigator.share({ title: conversationTitle, url }).catch(() => {});
     } else if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(url);
       showSuccess("Link copied");
     }
   }
 
-  function renderMessage(msg) {
-    const isUser = msg.sender === "user";
-    const time = formatTime(msg.createdAt);
+  function handleSuggestedPrompt(prompt) {
+    if (sending || chatClosed || awaitingConfirmation || awaitingOptionChoice) {
+      return;
+    }
+    setMessageInput(prompt);
+    messageInputRef.current?.focus();
+  }
+
+  function renderMessageBody(msg, isUser) {
     const showConfirm =
       !isUser &&
       msg.aiAnswerType === "summary" &&
       msg.id === latestSummaryId &&
       awaitingConfirmation;
+    const showOptionButtons =
+      !isUser &&
+      msg.id === latestAiMessageId &&
+      awaitingOptionChoice &&
+      pendingOptions?.options?.length > 0;
 
-  return (
-      <article
-        key={msg.id}
-        className={
-          isUser
-            ? "ml-auto w-full max-w-[min(100%,560px)]"
-            : "w-full max-w-[min(100%,560px)]"
-        }
-      >
-        <p
-          className={`mb-2 text-[14px] font-semibold leading-none text-[#101827] ${
-            isUser ? "text-right pr-11" : "pl-12"
-          }`}
-        >
-          {isUser ? "You" : "Ruag Team"}
-          {time ? `, ${time}` : ""}
-        </p>
-        <div
-          className={`flex items-end gap-2 ${isUser ? "justify-end" : "justify-start"}`}
-        >
-          {!isUser ? <Avatar src={teamAvatar} label="Ruag Team" /> : null}
-          <div
-            className={`max-w-[560px] ${isUser ? bubbleUser : bubbleTeam} whitespace-pre-wrap`}
-          >
-            {showConfirm ? (
-              <>
-                <p className="text-[13px] text-slate-700">
-                  Here’s how I understand your request. Please confirm before I
-                  open the ticket.
-                </p>
-                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                    Summary
-                  </p>
-                  <p className="mt-1.5 text-[13px] leading-relaxed text-slate-800">
-                    {msg.content}
-                  </p>
-                </div>
-                <p className="mt-3 text-[13px] text-slate-700">
-                  Do you confirm this is correct?
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className={`${btnNo} ${confirming ? "pointer-events-none opacity-45" : ""}`}
-                    onClick={() => handleConfirm(false)}
-                    disabled={confirming}
-                  >
-                    No
-                  </button>
-                  <button
-                    type="button"
-                    className={`${btnYes} ${confirming ? "pointer-events-none opacity-45" : ""}`}
-                    onClick={() => handleConfirm(true)}
-                    disabled={confirming}
-                  >
-                    Yes
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <p>{msg.content}</p>
-                {msg.attachments?.length ? (
-                  <div className="mt-2 flex flex-col gap-1.5">
-                    {msg.attachments.map((att) => (
-                      <AttachmentChip key={att.id} attachment={att} />
-                    ))}
-                  </div>
-                ) : null}
-              </>
-            )}
+    if (showConfirm) {
+      return (
+        <>
+          <p>
+            Here’s how I understand your request. Please confirm before I open
+            the ticket.
+          </p>
+          <div className="mt-3 rounded-xl border border-border-subtle bg-surface-muted p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-content-muted">
+              Summary
+            </p>
+            <p className="mt-1.5 leading-relaxed">{msg.content}</p>
           </div>
-          {isUser ? <Avatar src={userAvatar} label="You" /> : null}
+          <p className="mt-3">Do you confirm this is correct?</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={`${btnNo} ${confirming ? "pointer-events-none opacity-45" : ""}`}
+              onClick={() => handleConfirm(false)}
+              disabled={confirming}
+            >
+              No
+            </button>
+            <button
+              type="button"
+              className={`${btnYes} ${confirming ? "pointer-events-none opacity-45" : ""}`}
+              onClick={() => handleConfirm(true)}
+              disabled={confirming}
+            >
+              Yes
+            </button>
+          </div>
+        </>
+      );
+    }
+
+    if (showOptionButtons) {
+      return (
+        <>
+          <p>{msg.content}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {pendingOptions.options.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={`${btnYes} ${sending ? "pointer-events-none opacity-45" : ""}`}
+                onClick={() => handleOptionChoice(option)}
+                disabled={sending}
+              >
+                {formatOptionLabel(option)}
+              </button>
+            ))}
+          </div>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <p>{msg.content}</p>
+        {msg.ticketId ? (
+          <p className="mt-2 text-[11px] font-medium text-content-muted">
+            Ticket ID: {msg.ticketId}
+          </p>
+        ) : null}
+        {msg.attachments?.length ? (
+          <div className="mt-2 flex flex-col gap-1.5">
+            {msg.attachments.map((att) => (
+              <AttachmentChip key={att.id} attachment={att} />
+            ))}
+          </div>
+        ) : null}
+      </>
+    );
+  }
+
+  function renderMessage(msg) {
+    const isUser = msg.sender === "user";
+    const time = formatTime(msg.createdAt);
+
+    if (!isUser) {
+      return (
+        <motion.div
+          key={msg.id}
+          layout
+          className="client-chat-row client-chat-row--team flex w-full"
+          {...messageBubble}
+        >
+          <div className="client-assistant-block">
+            <Avatar src={teamAvatar} label="Ruag Team" />
+            <div className="client-assistant-col">
+              <p className="client-chat-meta">
+                <strong>Ruag Team</strong>
+                {time ? <> · {time}</> : null}
+              </p>
+              <div className="client-chat-bubble-team mt-1.5 whitespace-pre-wrap">
+                {renderMessageBody(msg, false)}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      );
+    }
+
+    return (
+      <motion.div
+        key={msg.id}
+        layout
+        className="client-chat-row client-chat-row--user flex w-full"
+        {...messageBubble}
+      >
+        <div className="client-chat-user-col">
+          <p className="client-chat-meta text-right">
+            <strong>You</strong>
+            {time ? <> · {time}</> : null}
+          </p>
+          <div className="flex items-end gap-2.5">
+            <div className="client-chat-bubble-user min-w-0 whitespace-pre-wrap">
+              {renderMessageBody(msg, true)}
+            </div>
+            <Avatar src={userAvatar} label="You" />
+          </div>
         </div>
-      </article>
+      </motion.div>
     );
   }
 
   function renderStreaming() {
     if (!streamingDraft) return null;
+    if (!streamingDraft.content?.trim()) {
+      return <TypingIndicator />;
+    }
+
+    const time = formatTime(new Date().toISOString());
     return (
-      <article className="w-full max-w-[min(100%,560px)]">
-        <p className="mb-2 pl-12 text-[14px] font-semibold leading-none text-[#101827]">
-          Ruag Team
-        </p>
-        <div className="flex items-end gap-2 justify-start">
+      <motion.div
+        className="client-chat-row client-chat-row--team flex w-full"
+        {...messageBubble}
+      >
+        <div className="client-assistant-block">
           <Avatar src={teamAvatar} label="Ruag Team" />
-          <div className={`max-w-[560px] ${bubbleTeam} whitespace-pre-wrap`}>
-            {streamingDraft.content || (
-              <span className="inline-flex gap-1 text-slate-400">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:120ms]" />
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:240ms]" />
-              </span>
-            )}
+          <div className="client-assistant-col">
+            <p className="client-chat-meta">
+              <strong>Ruag Team</strong>
+              {time ? <> · {time}</> : null}
+            </p>
+            <div className="client-chat-bubble-team mt-1.5 whitespace-pre-wrap">
+              {streamingDraft.content}
+            </div>
           </div>
         </div>
-      </article>
+      </motion.div>
     );
   }
 
@@ -574,77 +811,79 @@ export default function ClientCreateTicket() {
       ? "This chat is closed. Click ‘New Chat’ to start another."
       : awaitingConfirmation
         ? "Please answer Yes or No above to continue."
-        : "Write your message..."
+        : awaitingOptionChoice
+          ? "Please choose one of the options above to continue."
+          : "Write your message..."
     : "Describe your issue to start a new chat...";
 
-  const inputDisabled = sending || chatClosed || awaitingConfirmation;
+  const inputDisabled =
+    sending || chatClosed || awaitingConfirmation || awaitingOptionChoice;
 
   return (
     <PortalLayout mode="client">
-      <section className="mx-auto flex h-[calc(100dvh-6rem)] max-h-[calc(100dvh-6rem)] min-h-0 w-full max-w-[920px] flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
-        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/90 bg-white px-4 py-3 sm:px-5">
-          <div className="flex items-center gap-3">
-            <h1 className="text-[18px] font-semibold leading-tight text-[#0f172a] sm:text-[20px]">
-              Create Ticket
+      <motion.section className="client-chat-shell" {...scaleIn}>
+        <header className="client-chat-header flex shrink-0 flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+            <h1 className="client-chat-header-title truncate">
+              {conversationTitle}
             </h1>
-            {chat ? (
-              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-600">
-                {chat.status.replace("_", " ")}
-              </span>
-            ) : null}
+            <span className="client-chat-status-badge shrink-0">
+              {formatChatStatus(chat?.status ?? "active")}
+            </span>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5">
             <button
               type="button"
               onClick={() => navigate("/client/drafts")}
-              className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-white px-4 py-2 text-[13px] font-medium text-[#111827] shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition hover:bg-slate-50"
+              className="client-chat-header-btn hidden sm:inline-flex"
             >
               Drafts
             </button>
             <button
               type="button"
               onClick={handleShare}
-              className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-white px-4 py-2 text-[13px] font-medium text-[#111827] shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition hover:bg-slate-50"
+              className="client-chat-header-btn"
+              aria-label="Share conversation"
             >
-              <FaRegShareFromSquare className="text-[14px]" aria-hidden />
-              Share
+              <FaRegShareFromSquare className="text-[13px]" aria-hidden />
+              <span className="hidden sm:inline">Share</span>
             </button>
             <button
               type="button"
               onClick={handleNewChat}
-              className="rounded-full bg-[#020c3d] px-4 py-2 text-[13px] font-semibold text-white shadow-[0_1px_2px_rgba(16,24,40,0.18)] transition hover:bg-[#0a1a5c]"
+              className="client-chat-header-btn client-chat-header-btn--primary"
             >
               New Chat
             </button>
           </div>
         </header>
 
-        <div
-          ref={scrollRef}
-          className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#F5F7FA] to-white p-4 ${scrollPretty}`}
-        >
-          <div className="mx-auto max-w-[920px] space-y-5">
-            {displayMessages.length === 0 && !streamingDraft ? (
-              <div className="mt-12 text-center text-slate-500">
-                <p className="text-[14px]">
-                  Start by describing the problem you’re facing. The assistant
-                  will help you draft a ticket.
-                </p>
-                <p className="mt-2 text-[12px] text-slate-400">
-                  Tip: ask for a “summary” when you’re ready to open the
-                  ticket.
-                </p>
-              </div>
-            ) : null}
+        <div ref={scrollRef} className={`client-chat-messages ${scrollPretty}`}>
+          <div className="client-chat-thread">
             {displayMessages.map(renderMessage)}
+            {messages.length === 0 && !streamingDraft ? (
+              <motion.div
+                className="mt-1 grid gap-2 sm:grid-cols-2"
+                {...fadeInUp}
+              >
+                {SUGGESTED_PROMPTS.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    className="client-chat-prompt-btn"
+                    onClick={() => handleSuggestedPrompt(prompt)}
+                    disabled={inputDisabled}
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </motion.div>
+            ) : null}
             {renderStreaming()}
           </div>
         </div>
 
-        <form
-          onSubmit={handleSubmit}
-          className="shrink-0 border-t border-slate-200/90 bg-white px-4 pb-4 pt-3 sm:px-6"
-        >
+        <form onSubmit={handleSubmit} className="client-chat-footer">
           <input
             ref={fileInputRef}
             type="file"
@@ -653,17 +892,17 @@ export default function ClientCreateTicket() {
             className="hidden"
           />
           {pendingFile ? (
-            <div className="mx-auto mb-2 flex max-w-[720px] items-center justify-end">
-              <span className="inline-flex max-w-full items-center gap-2 truncate rounded-full bg-[#E7F3FF] px-3 py-1 text-[12px] font-medium text-[#1e293b] ring-1 ring-sky-200/40">
+            <div className="mx-auto mb-2 flex w-full max-w-[1000px] items-center justify-end">
+              <span className="inline-flex max-w-full items-center gap-2 truncate rounded-full bg-[var(--client-chat-user-bg)] px-3 py-1 text-[12px] font-medium text-[var(--client-chat-user-fg)] ring-1 ring-[var(--client-chat-user-ring)]">
                 <FiPaperclip className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 <span className="truncate">{pendingFile.name}</span>
-                <span className="shrink-0 text-slate-500">
+                <span className="shrink-0 text-content-muted">
                   {formatBytes(pendingFile.size)}
                 </span>
                 <button
                   type="button"
                   onClick={() => setPendingFile(null)}
-                  className="text-slate-500 hover:text-slate-800"
+                  className="text-content-muted hover:text-content"
                   aria-label="Remove attachment"
                 >
                   <FiX className="h-3.5 w-3.5" />
@@ -671,12 +910,12 @@ export default function ClientCreateTicket() {
               </span>
             </div>
           ) : null}
-          <div className="mx-auto flex max-w-[720px] items-center gap-1 rounded-2xl border border-[#e7e9ef] bg-white px-3 py-2 shadow-[0_1px_1px_rgba(16,24,40,0.04)]">
+          <div className="client-chat-composer">
             <button
               type="button"
               onClick={handleOpenFilePicker}
               disabled={inputDisabled}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="client-chat-composer-icon"
               aria-label="Add attachment"
               title="Attach an image, PDF or text file"
             >
@@ -686,6 +925,7 @@ export default function ClientCreateTicket() {
               Write your message
             </label>
             <input
+              ref={messageInputRef}
               id="create-ticket-message"
               type="text"
               value={messageInput}
@@ -694,38 +934,40 @@ export default function ClientCreateTicket() {
                 uploading ? "Uploading attachment..." : placeholderText
               }
               disabled={inputDisabled}
-              className="min-h-[44px] min-w-0 flex-1 border-0 bg-transparent text-[15px] text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:ring-0 disabled:cursor-not-allowed"
+              className="min-h-[46px] min-w-0 flex-1 border-0 bg-transparent px-1 text-[15px] text-content placeholder:text-content-muted focus:outline-none focus:ring-0 disabled:cursor-not-allowed"
             />
-            <button
-              type="button"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#c2c8d3] transition hover:text-slate-600"
-              aria-label="Emoji"
-              disabled
-            >
-              <FiSmile className="text-[17px]" />
-            </button>
-            <button
-              type="button"
-              onClick={handleOpenFilePicker}
-              disabled={inputDisabled}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#c2c8d3] transition hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label="Attach file"
-            >
-              <FiPaperclip className="text-[17px]" />
-            </button>
-            <button
-              type="submit"
-              disabled={
-                inputDisabled || (!messageInput.trim() && !pendingFile)
-              }
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#020c3d] text-white shadow-sm transition hover:bg-[#0a1a5c] disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label="Send message"
-            >
-              <FiSend className="text-[18px]" />
-            </button>
+            <div className="client-chat-composer-tools">
+              <button
+                type="button"
+                className="client-chat-composer-icon"
+                aria-label="Emoji"
+                disabled
+              >
+                <FiSmile className="text-[17px]" />
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenFilePicker}
+                disabled={inputDisabled}
+                className="client-chat-composer-icon"
+                aria-label="Attach file"
+              >
+                <FiPaperclip className="text-[17px]" />
+              </button>
+              <button
+                type="submit"
+                disabled={
+                  inputDisabled || (!messageInput.trim() && !pendingFile)
+                }
+                className="client-chat-send-btn"
+                aria-label="Send message"
+              >
+                <FiSend className="text-[17px]" />
+              </button>
+            </div>
           </div>
         </form>
-      </section>
+      </motion.section>
     </PortalLayout>
   );
 }

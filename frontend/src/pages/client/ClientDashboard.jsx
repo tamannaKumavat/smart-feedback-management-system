@@ -1,8 +1,10 @@
+import { motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import ClientStats from "../../components/dashboard/client/ClientStats.jsx";
 import ProjectHistoryTable from "../../components/dashboard/client/ProjectHistoryTable.jsx";
 import PortalLayout from "../../layouts/PortalLayout.jsx";
 import { listMyIssues } from "../../lib/chatApi.js";
+import { fadeInUp } from "../../lib/motion.js";
 import { showError } from "../../lib/toast.js";
 
 function mapTicketStatusToPhase(status) {
@@ -56,7 +58,9 @@ export default function ClientDashboard() {
     const resolved = issues.filter(
       (i) => String(i.status || "").toLowerCase() === "closed",
     ).length;
-    const avgResponse = "N/A";
+    const drafts = issues.filter(
+      (i) => String(i.status || "").toLowerCase() === "draft",
+    ).length;
     return [
       {
         id: "totalCreated",
@@ -79,10 +83,11 @@ export default function ClientDashboard() {
         percentOfTotal: total ? Math.round((resolved / total) * 100) : 0,
       },
       {
-        id: "avgResponse",
-        title: "Average response time",
-        value: avgResponse,
-        iconKey: "zap",
+        id: "drafts",
+        title: "Draft count",
+        value: String(drafts),
+        iconKey: "fileText",
+        percentOfTotal: total ? Math.round((drafts / total) * 100) : 0,
       },
     ];
   }, [issues]);
@@ -115,12 +120,12 @@ export default function ClientDashboard() {
 
   return (
     <PortalLayout mode="client">
-      <section className="mx-auto flex h-[calc(100dvh-6rem)] max-h-[calc(100dvh-6rem)] min-h-0 min-w-0 w-full max-w-[min(100%,1600px)] flex-col gap-6 overflow-hidden">
+      <section className="mx-auto flex h-full min-h-0 min-w-0 w-full max-w-[min(100%,1600px)] flex-col gap-6 overflow-hidden">
         <ClientStats stats={stats} />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {loading ? (
-            <div className="flex flex-1 items-center justify-center text-[13px] text-slate-500">
+            <div className="flex flex-1 items-center justify-center text-[13px] text-content-muted">
               Loading issues...
             </div>
           ) : (
