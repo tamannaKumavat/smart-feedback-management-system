@@ -116,9 +116,6 @@ export default function ClientCreateTicket() {
   const [searchParams, setSearchParams] = useSearchParams();
   const chatId = searchParams.get("chatId");
   const token = getToken();
-  const params = new URLSearchParams();
-  if (token) params.set("token", token);
-  if (chatId) params.set("chat_id", chatId);
 
   // State
   const [chat, setChat] = useState(null);
@@ -176,11 +173,28 @@ useEffect(() => {
   chatRef.current = chat;
 }, [chat]);
 
+// Mark as draft when navigating away or closing the tab mid-flow.
+// mark_as_draft on the backend is a no-op for already-closed issues.
+useEffect(() => {
+  if (!chat) return;
+  const markDraft = () => {
+    if (chatRef.current?.id) markChatAsDraft(chatRef.current.id);
+  };
+  window.addEventListener("beforeunload", markDraft);
+  return () => {
+    window.removeEventListener("beforeunload", markDraft);
+    markDraft(); // also fires on React unmount (SPA navigation)
+  };
+}, [chat?.id]);
+
 // Step 3: Connect WebSocket ONLY after chat is initialized
 useEffect(() => {
   if (!chat) return; // Wait for chat to be created/loaded
-    
-    const wsUrl = `ws://${window.location.hostname}:8000/ws/chat?${params}`;
+
+    const wsParams = new URLSearchParams();
+    if (token) wsParams.set("token", token);
+    wsParams.set("chat_id", chat.id); // Always use chat.id, never URL param
+    const wsUrl = `ws://${window.location.hostname}:8000/ws/chat?${wsParams}`;
     if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
       return;
     }
@@ -249,10 +263,6 @@ useEffect(() => {
         console.log("[WS] Disconnected");
         setWsConnected(false);
         setAiWaitingForInput(false);
-        
-        setTimeout(() => {
-          setupWebSocket();
-        }, 5000);
       };
     };
 
@@ -342,10 +352,25 @@ const handleSubmit = async (event) => {
 };
 
   // Start a new chat
-  const handleNewChat = () => {
+  const handleNewChat = async () => {
+    if (wsRef.current) {
+      wsRef.current.onclose = null;
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    setMessages([]);
     setMessageInput("");
     setPendingFile(null);
-    setAiWaitingForInput(true);
+    setWsConnected(false);
+    setAiWaitingForInput(false);
+    setSearchParams({});
+
+    try {
+      const created = await createChat();
+      setChat(created.chat); // triggers WS effect with correct chat.id
+    } catch (err) {
+      showError(err, "Could not start new chat");
+    }
   };
 
   // Share chat link
