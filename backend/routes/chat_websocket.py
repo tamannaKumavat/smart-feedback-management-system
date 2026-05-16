@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
@@ -11,8 +10,8 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.types import Command
 
 from config import DATABASE_URL, MOCK_MODE
-from db import SessionLocal, AsyncSessionLocal
-from models.chat import AI_ANSWER_NORMAL, TICKET_STATUS_NEW, Ticket
+from db import SessionLocal
+from models.chat import AI_ANSWER_NORMAL
 from services import attachment_service, chat_service
 from services.security import _resolve_user
 from workflows.smart_feedback.workflow import build_workflow
@@ -38,6 +37,7 @@ async def _get_checkpointer():
             DATABASE_URL.replace("+psycopg", "")
         ) as cp:
             yield cp
+
 
 def _message_dto(msg) -> dict:
     attachments = [
@@ -83,6 +83,7 @@ async def websocket_endpoint(
                 # Auto-resume if the issue is still draft (race between
                 # markChatAsDraft cleanup and WS reconnect, or slow HTTP resume)
                 from models.chat import ISSUE_STATUS_DRAFT, ISSUE_STATUS_CLOSED
+
                 if issue.status == ISSUE_STATUS_CLOSED:
                     await websocket.close(code=4003)
                     return
@@ -99,7 +100,7 @@ async def websocket_endpoint(
         prior_msgs = [{"sender": m.sender, "content": m.content} for m in history]
         await websocket.accept()
         if prior_msgs:
-            initial_state = None # If we want to continue the graph from the specific state, we need to pass the initial state as None. Only than it can continue!
+            initial_state = None  # If we want to continue the graph from the specific state, we need to pass the initial state as None. Only than it can continue!
         else:
             initial_state = {
                 "user_query": "",
@@ -152,12 +153,18 @@ async def websocket_endpoint(
                             interrupt_content = str(interrupt_val)
                             interrupt_options = []
                         if interrupt_content:
-                            chat_service.record_ai_message(db, issue, interrupt_content, AI_ANSWER_NORMAL)
-                        await websocket.send_text(json.dumps({
-                            "type": "options",
-                            "content": interrupt_content,
-                            "options": interrupt_options,
-                        }))
+                            chat_service.record_ai_message(
+                                db, issue, interrupt_content, AI_ANSWER_NORMAL
+                            )
+                        await websocket.send_text(
+                            json.dumps(
+                                {
+                                    "type": "options",
+                                    "content": interrupt_content,
+                                    "options": interrupt_options,
+                                }
+                            )
+                        )
 
                         raw_response = await websocket.receive_text()
                         try:
@@ -172,15 +179,22 @@ async def websocket_endpoint(
                             resp_content = raw_response.strip()
                             resp_att_ids = []
                         if resp_content:
-                            resp_msg = chat_service.record_user_message(db, issue, resp_content)
+                            resp_msg = chat_service.record_user_message(
+                                db, issue, resp_content
+                            )
                             if resp_att_ids:
                                 attachment_service.link_attachments_to_message(
-                                    db, message=resp_msg, attachment_ids=resp_att_ids, user_id=user.id
+                                    db,
+                                    message=resp_msg,
+                                    attachment_ids=resp_att_ids,
+                                    user_id=user.id,
                                 )
                         user_input = Command(resume=resp_content)
 
                     elif "end_node" in chunk.get("data", {}):
-                        summary = chunk["data"]["end_node"].get("final_user_response", "")
+                        summary = chunk["data"]["end_node"].get(
+                            "final_user_response", ""
+                        )
                         chat_service.close_issue(db, issue, summary=summary or None)
                         should_run = False
 
@@ -189,40 +203,69 @@ async def websocket_endpoint(
                         # Skip when needs_clarification=True: the question will surface
                         # via the next interrupt instead of being shown twice.
                         if node_data.get("needs_clarification") is not True:
-                            ai_content = str(node_data.get("engagement_response") or "").strip()
+                            ai_content = str(
+                                node_data.get("engagement_response") or ""
+                            ).strip()
                             if ai_content:
-                                chat_service.record_ai_message(db, issue, ai_content, AI_ANSWER_NORMAL)
-                                await websocket.send_text(json.dumps({
-                                    "type": "message",
-                                    "content": ai_content,
-                                }))
+                                chat_service.record_ai_message(
+                                    db, issue, ai_content, AI_ANSWER_NORMAL
+                                )
+                                await websocket.send_text(
+                                    json.dumps(
+                                        {
+                                            "type": "message",
+                                            "content": ai_content,
+                                        }
+                                    )
+                                )
 
                     elif "formulate_ticket_content" in chunk.get("data", {}):
-                        ticket_content = str(chunk["data"]["formulate_ticket_content"].get("ticket_summary") or "").strip()
+                        ticket_content = str(
+                            chunk["data"]["formulate_ticket_content"].get(
+                                "ticket_summary"
+                            )
+                            or ""
+                        ).strip()
                         if ticket_content:
-                            chat_service.record_ai_message(db, issue, ticket_content, AI_ANSWER_NORMAL)
-                            await websocket.send_text(json.dumps({
-                                "type": "message",
-                                "content": ticket_content,
-                            }))
+                            chat_service.record_ai_message(
+                                db, issue, ticket_content, AI_ANSWER_NORMAL
+                            )
+                            await websocket.send_text(
+                                json.dumps(
+                                    {
+                                        "type": "message",
+                                        "content": ticket_content,
+                                    }
+                                )
+                            )
 
                     elif "generate_ticket_created_response" in chunk.get("data", {}):
-                        confirmation = chunk["data"]["generate_ticket_created_response"].get("final_user_response", "").strip()
+                        confirmation = (
+                            chunk["data"]["generate_ticket_created_response"]
+                            .get("final_user_response", "")
+                            .strip()
+                        )
                         if confirmation:
-                            chat_service.record_ai_message(db, issue, confirmation, AI_ANSWER_NORMAL)
-                            await websocket.send_text(json.dumps({
-                                "type": "message",
-                                "content": confirmation,
-                            }))
+                            chat_service.record_ai_message(
+                                db, issue, confirmation, AI_ANSWER_NORMAL
+                            )
+                            await websocket.send_text(
+                                json.dumps(
+                                    {
+                                        "type": "message",
+                                        "content": confirmation,
+                                    }
+                                )
+                            )
 
                 if "end_node" in chunk.get("data", {}):
                     should_run = False
-            
 
     except WebSocketDisconnect:
         print("[ws] Client disconnected")
     except Exception:
         import traceback
+
         traceback.print_exc()
     finally:
         db.close()
