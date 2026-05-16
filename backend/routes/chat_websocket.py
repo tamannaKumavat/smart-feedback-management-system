@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from langgraph.checkpoint.memory import MemorySaver
-#from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.types import Command
 
 from config import DATABASE_URL, MOCK_MODE
@@ -18,7 +18,7 @@ from services.security import _resolve_user
 from workflows.smart_feedback.workflow import build_workflow
 from langchain_ollama import ChatOllama
 
-
+# chat_model = ChatOllama(model="hf.co/unsloth/granite-4.0-h-tiny-GGUF:Q8_0", temperature=0.1)
 # chat_model = ChatOllama(model="qwen2.5-coder:3b", temperature=0.1)
 
 
@@ -30,15 +30,14 @@ router = APIRouter(prefix="/ws", tags=["chat"])
 @asynccontextmanager
 async def _get_checkpointer():
     """Yields MemorySaver in mock mode, AsyncPostgresSaver in production."""
-    
-    yield MemorySaver()
-    """
+    if MOCK_MODE:
+        yield MemorySaver()
+
     else:
         async with AsyncPostgresSaver.from_conn_string(
             DATABASE_URL.replace("+psycopg", "")
         ) as cp:
             yield cp
-    """
 
 def _message_dto(msg) -> dict:
     attachments = [
@@ -98,27 +97,28 @@ async def websocket_endpoint(
         # Build prior history for the workflow
         history = chat_service.list_messages(db, issue.id, user.id)
         prior_msgs = [{"sender": m.sender, "content": m.content} for m in history]
-
         await websocket.accept()
-
-        initial_state = {
-            "user_query": "",
-            "prior_history": prior_msgs,
-            "chat_history": [],
-            "is_first_message": True,
-            "needs_clarification": False,
-            "human_assessment": "",
-            "ticket_id": "",
-            "analysis_agent_result": None,
-            "rag_results": [],
-            "rag_user_assessment": "",
-            "rag_workflow_state": {},
-            "triage_workflow": {},
-            "engagement_response": "",
-            "ready_to_create_ticket": False,
-            "ticket_content": "",
-            "final_user_response": "",
-        }
+        if prior_msgs:
+            initial_state = None # If we want to continue the graph from the specific state, we need to pass the initial state as None. Only than it can continue!
+        else:
+            initial_state = {
+                "user_query": "",
+                "prior_history": prior_msgs,
+                "chat_history": [],
+                "is_first_message": True,
+                "needs_clarification": False,
+                "human_assessment": "",
+                "ticket_id": "",
+                "analysis_agent_result": None,
+                "rag_results": [],
+                "rag_user_assessment": "",
+                "rag_workflow_state": {},
+                "triage_workflow": {},
+                "engagement_response": "",
+                "ready_to_create_ticket": False,
+                "ticket_content": "",
+                "final_user_response": "",
+            }
 
         new_thread_id = chat_id if chat_id else issue.id
         config = {"configurable": {"thread_id": new_thread_id}}
