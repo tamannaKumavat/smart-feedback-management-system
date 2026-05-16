@@ -50,7 +50,7 @@ system_engagement_followup: str = (
     "Always be professional and concise."
 )
 
-user_engagement_followup: str = "User's latest message: {user_query}"
+user_engagement_followup: str = "User's latest message: {user_query}. The previous conversation history: \n --- \n {conversation_history}  \n --- \n"
 
 chat_template_engagement_followup: ChatPromptTemplate = ChatPromptTemplate(
     [("system", system_engagement_followup), ("human", user_engagement_followup)]
