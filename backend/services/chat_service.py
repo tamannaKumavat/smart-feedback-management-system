@@ -21,6 +21,7 @@ from models.chat import (
     SENDER_AI,
     SENDER_USER,
     SENDERS,
+    TICKET_STATUS_NEW,
     TICKET_STATUS_OPEN,
     Issue,
     Message,
@@ -224,6 +225,44 @@ def confirm_summary(
     db.refresh(ticket)
     db.refresh(issue)
     return issue, ticket
+
+
+def close_issue(db: Session, issue: Issue, summary: str | None = None) -> Issue:
+    issue.status = ISSUE_STATUS_CLOSED
+    if summary:
+        issue.summary = summary
+    db.commit()
+    db.refresh(issue)
+    return issue
+
+
+def create_ticket_from_triage(
+    db: Session,
+    issue: Issue,
+    user_id: str,
+    summary: str,
+    description: str | None = None,
+    issue_type: str | None = None,
+    priority: str | None = None,
+    team: str | None = None,
+    recommended_action: str | None = None,
+) -> Ticket:
+    """Create a Ticket row from triage workflow output after user confirms."""
+    ticket = Ticket(
+        issue_id=issue.id,
+        user_id=user_id,
+        summary=summary,
+        description=description,
+        issue_type=issue_type,
+        priority=priority,
+        team=team,
+        recommended_action=recommended_action,
+        status=TICKET_STATUS_NEW,
+    )
+    db.add(ticket)
+    db.commit()
+    db.refresh(ticket)
+    return ticket
 
 
 def update_ticket(

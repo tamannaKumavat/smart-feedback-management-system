@@ -21,9 +21,9 @@ class EngagementDecision(BaseModel):
     needs_clarification: bool = Field(
         description=(
             "True if the user query is vague or missing key details and a "
-            "clarifying question must be asked before proceeding."
+            "clarifying question must be asked before proceeding. Also if the user starts small talk!!"
         ),
-        default=False,
+        default=True,
     )
     response: str = Field(
         description=(
@@ -58,6 +58,10 @@ class AnalysisAgentResult(BaseModel):
     )
 
 
+class InterruptData(TypedDict):
+    content: str
+    options: list
+
 class SmartFeedbackState(TypedDict):
     issue_id: str
     user_id: str
@@ -79,5 +83,6 @@ class SmartFeedbackState(TypedDict):
     ticket_summary: str            # structured ticket body built by formulate_ticket_content
     ticket_content: str            # structured ticket body built by formulate_ticket_content
     jira_ticket: dict              # Jira issue metadata after add_ticket_to_jira
+    ticket_data: dict
     incident_assessment: Annotated[List[IncidentAssessment], add]
     incident_assessment_judge: Annotated[List[IncidentAssessmentJudge], add]

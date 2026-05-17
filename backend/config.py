@@ -16,7 +16,7 @@ load_dotenv(_BACKEND_ENV, override=False)
 WATSONX_API_KEY = os.getenv("WATSONX_API_KEY", "")
 WATSONX_PROJECT_ID = os.getenv("WATSONX_PROJECT_ID", "")
 WATSONX_URL = os.getenv("WATSONX_URL", "https://eu-de.ml.cloud.ibm.com")
-WATSONX_MODEL_ID = os.getenv("WATSONX_MODEL_ID", "ibm/granite-3-8b-instruct")
+WATSONX_MODEL_ID = os.getenv("WATSONX_MODEL_ID", "mistralai/mistral-small-3-1-24b-instruct-2503")
 WATSONX_EMBEDDING_MODEL_ID = os.getenv("WATSONX_EMBEDDING_MODEL_ID", "ibm/granite-embedding-278m-multilingual")
 MOCK_MODE = os.getenv("MOCK_MODE", "true").lower() == "true"
 RAG_RELEVANCE_THRESHOLD = float(os.getenv("RAG_RELEVANCE_THRESHOLD", "0.75"))
