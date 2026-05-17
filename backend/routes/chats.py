@@ -142,6 +142,24 @@ def list_drafts(
     return {"ok": True, "drafts": [_issue_dto(c) for c in drafts]}
 
 
+@router.get("/issues")
+def list_issues(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    issues = chat_service.list_issues(db, current_user.id)
+    return {"ok": True, "issues": [_issue_dto(i) for i in issues]}
+
+
+@router.get("/issues")
+def list_issues(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    issues = chat_service.list_issues(db, current_user.id)
+    return {"ok": True, "issues": [_chat_dto(i) for i in issues]}
+
+
 @router.post("/chats/{chat_id}/resume")
 def resume_chat(
     chat_id: str,

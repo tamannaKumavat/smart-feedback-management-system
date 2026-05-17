@@ -2,9 +2,16 @@ from dotenv import load_dotenv
 from pathlib import Path
 import os
 
-# Load from root .env first, then fall back to backend/.env if present
-load_dotenv(Path(__file__).parent.parent / ".env")
-load_dotenv()
+# Load env files deterministically:
+# 1) repo root .env (if present)
+# 2) backend/.env (this project keeps runtime values here)
+# 3) ambient env from process (already exported variables still win)
+_HERE = Path(__file__).resolve().parent
+_ROOT_ENV = _HERE.parent / ".env"
+_BACKEND_ENV = _HERE / ".env"
+
+load_dotenv(_ROOT_ENV, override=False)
+load_dotenv(_BACKEND_ENV, override=False)
 
 WATSONX_API_KEY = os.getenv("WATSONX_API_KEY", "")
 WATSONX_PROJECT_ID = os.getenv("WATSONX_PROJECT_ID", "")
@@ -15,7 +22,7 @@ MOCK_MODE = os.getenv("MOCK_MODE", "true").lower() == "true"
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+psycopg://sfms:sfms@localhost:5433/issues",
+    "postgresql+psycopg://postgres:[YOUR-PASSWORD]@[YOUR-PROJECT-REF].supabase.co:5432/postgres",
 )
 
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me")
@@ -33,6 +40,14 @@ ALLOWED_UPLOAD_MIME_PREFIXES = (
     "image/",
     "application/pdf",
     "text/",
+)
+
+# Supabase Storage (private bucket + signed URLs).
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "attachments")
+SUPABASE_SIGNED_URL_TTL_SECONDS = int(
+    os.getenv("SUPABASE_SIGNED_URL_TTL_SECONDS", "120")
 )
 
 JIRA_BASE_URL = os.getenv("JIRA_BASE_URL", "").rstrip("/")

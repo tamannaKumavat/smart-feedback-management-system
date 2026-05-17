@@ -105,18 +105,18 @@ export default function ClientTicketHistory() {
 
   return (
     <PortalLayout mode="client">
-      <section className="mx-auto flex h-[calc(100dvh-6rem)] max-h-[calc(100dvh-6rem)] min-h-0 min-w-0 w-full max-w-[min(100%,1600px)] flex-col overflow-hidden rounded-xl border border-slate-200/60 bg-white shadow-sm">
+      <section className="client-card mx-auto flex h-full min-h-0 min-w-0 w-full max-w-[min(100%,1600px)] flex-col overflow-hidden">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {loading ? (
-            <div className="flex flex-1 items-center justify-center text-[13px] text-slate-500">
+            <div className="flex flex-1 items-center justify-center text-[13px] text-content-muted">
               Loading tickets…
             </div>
           ) : threads.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
-              <p className="text-[14px] font-semibold text-slate-700">
+              <p className="text-[14px] font-semibold text-content">
                 No tickets yet
               </p>
-              <p className="max-w-[360px] text-[12px] text-slate-500">
+              <p className="max-w-[360px] text-[12px] text-content-muted">
                 When you confirm a ticket from a chat, it’ll appear here with
                 the full conversation.
               </p>

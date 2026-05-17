@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { FaRegShareFromSquare } from "react-icons/fa6";
@@ -14,17 +15,27 @@ import {
 } from "../../lib/chatApi.js";
 import { getToken } from "../../lib/session.js";
 import { showError, showSuccess } from "../../lib/toast.js";
-
-/*
-Still todo: 
-- create a chat like its expected with our chat api
-- restore old chats
-- send chat id to websocket 
-- Fix issue of disconnecting and then reconnecting again the websocket!
-*/
+import { fadeInUp } from "../../lib/motion.js";
 
 const MAX_UPLOAD_MB = 10;
 const ALLOWED_PREFIXES = ["image/", "application/pdf", "text/"];
+
+/*
+TODO: Not all the changes coudlnt be integrated
+- Chat selection buttons
+- Updated UI
+Here is the file commit with the expected new chat features:
+https://github.com/tamannaKumavat/smart-feedback-management-system/blob/5053a038a7a1eb8bf6c4586e100f985dd2ea7300/frontend/src/pages/client/ClientCreateTicket.jsx
+
+*/
+
+
+const SUGGESTED_PROMPTS = [
+  "I can't log in to my account",
+  "I need help drafting a support ticket",
+  "Something is broken in production",
+  "Can you summarize my issue for me?",
+];
 
 function isAllowedMime(mime) {
   if (!mime) return false;
@@ -40,10 +51,14 @@ function formatBytes(n) {
 
 const userAvatar = "/user.png";
 const teamAvatar = "/ruag-single.png";
+const btnYes = "client-btn-option";
+const btnNo = "client-btn-option-muted";
 
 const bubbleUser = "rounded-[18px] bg-[#E7F3FF] px-4 py-2.5 text-[13px] leading-relaxed text-[#1e293b] shadow-sm ring-1 ring-sky-200/40";
 const bubbleTeam = "rounded-[18px] bg-white px-4 py-2.5 text-[13px] leading-relaxed text-[#1e293b] shadow-sm ring-1 ring-slate-200/90";
-const scrollPretty = "[scrollbar-width:thin] [scrollbar-color:rgb(203_213_225/0.65)_transparent] [&::-webkit-scrollbar]:w-[6px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300/40 hover:[&::-webkit-scrollbar-thumb]:bg-slate-400/50";
+const scrollPretty =
+  "[scrollbar-width:thin] [scrollbar-color:rgb(100_116_139/0.45)_transparent] [&::-webkit-scrollbar]:w-[6px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border-input/60 hover:[&::-webkit-scrollbar-thumb]:bg-content-muted/50";
+
 
 function formatTime(iso) {
   if (!iso) return "";
@@ -111,6 +126,34 @@ function Avatar({ src, label }) {
   );
 }
 
+function TypingIndicator() {
+  return (
+    <motion.div
+      className="client-chat-row client-chat-row--team flex w-full"
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      <div className="client-assistant-block">
+        <Avatar src={teamAvatar} label="Ruag Team" />
+        <div className="client-assistant-col">
+          <p className="client-chat-meta">
+            <strong>Ruag Team</strong>
+          </p>
+          <div className="client-typing-bubble mt-2">
+            <span className="client-typing-dots inline-flex gap-1.5">
+              <span />
+              <span />
+              <span />
+            </span>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+
 export default function ClientCreateTicket() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -132,6 +175,51 @@ export default function ClientCreateTicket() {
   const fileInputRef = useRef(null);
   const wsRef = useRef(null);
   const chatRef = useRef(null);
+
+
+ async function handleOptionChoice(option) {
+    if (!option || sending || !pendingOptions) return;
+    if (chatClosed) {
+      showError("This chat is closed. Start a new one.");
+      return;
+    }
+
+    setPendingOptions(null);
+    setSending(true);
+
+    let activeChat = chat;
+    try {
+      activeChat = activeChat ?? (await ensureChat());
+    } catch (err) {
+      setSending(false);
+      showError(err, "Could not start chat");
+      return;
+    }
+
+    setMessages((prev) => [
+      ...prev,
+      createLocalMessage({
+        sender: "user",
+        content: option,
+        chatId: activeChat.id,
+      }),
+    ]);
+    streamingContentRef.current = "";
+    setStreamingDraft({ id: "streaming", content: "" });
+
+    const wsPayload = JSON.stringify({
+      type: "option_response",
+      content: option,
+    });
+
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(wsPayload);
+    } else {
+      showError("Connection lost. Please try again.");
+      setSending(false);
+      setStreamingDraft(null);
+    }
+  }
 
 useEffect(() => {
   let cancelled = false;
@@ -280,7 +368,7 @@ useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages]);
-
+    const displayMessages = chatId ? messages : [...messages];
   // Handle file selection
   const handleOpenFilePicker = () => {
     fileInputRef.current?.click();
@@ -389,6 +477,7 @@ const handleSubmit = async (event) => {
     const isUser = msg.sender === "user";
     const time = formatTime(msg.createdAt);
 
+
     return (
       <article
         key={msg.id}
@@ -447,17 +536,28 @@ const handleSubmit = async (event) => {
           </div>
         </header>
 
-        <div
-          ref={scrollRef}
-          className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#F5F7FA] to-white p-4 ${scrollPretty}`}
-        >
-          <div className="mx-auto max-w-[920px] space-y-5">
+        <div ref={scrollRef} className={`client-chat-messages ${scrollPretty}`}>
+          <div className="client-chat-thread">
+            {displayMessages.map(renderMessage)}
             {messages.length === 0 ? (
-              <div className="mt-12 text-center text-slate-500">
-                <p className="text-[14px]">Start by describing your issue.</p>
-              </div>
+              <motion.div
+                className="mt-1 grid gap-2 sm:grid-cols-2"
+                {...fadeInUp}
+              >
+                {SUGGESTED_PROMPTS.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    className="client-chat-prompt-btn"
+                    onClick={() => handleSuggestedPrompt(prompt)}
+                    disabled={inputDisabled}
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </motion.div>
             ) : null}
-            {messages.map(renderMessage)}
+            {/**/} 
           </div>
         </div>
 
