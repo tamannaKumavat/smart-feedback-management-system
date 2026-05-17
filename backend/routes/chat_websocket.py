@@ -15,10 +15,6 @@ from models.chat import AI_ANSWER_NORMAL
 from services import attachment_service, chat_service
 from services.security import _resolve_user
 from workflows.smart_feedback.workflow import build_workflow
-from langchain_ollama import ChatOllama
-
-# chat_model = ChatOllama(model="hf.co/unsloth/granite-4.0-h-tiny-GGUF:Q8_0", temperature=0.1)
-# chat_model = ChatOllama(model="qwen2.5-coder:3b", temperature=0.1)
 
 
 os.environ["LANGGRAPH_STRICT_MSGPACK"] = "true"
