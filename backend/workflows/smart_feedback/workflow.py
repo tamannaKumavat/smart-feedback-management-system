@@ -1,6 +1,10 @@
-from langgraph.graph import END, START, StateGraph
-from langchain_core.messages import AIMessage, HumanMessage
+import re
+import logging
 from typing import Any
+
+from langgraph.graph import END, START, StateGraph
+from langgraph.types import interrupt
+from langchain_core.messages import AIMessage, HumanMessage
 
 from workflows.smart_feedback.data_models import (
     SmartFeedbackState,
@@ -14,7 +18,6 @@ from workflows.smart_feedback.prompt_templates import (
     chat_template_engagement_rag,
 )
 from workflows.smart_feedback.rag_agent import RAGAgent, RELEVANCE_THRESHOLD
-from langgraph.types import interrupt
 
 from workflows.triage.data_models import (
     IncidentAssessment,
@@ -30,6 +33,24 @@ from workflows.triage.constants import (
     TriageJudgeDecision,
     HumanAssessment,
 )
+from services.jira_sync import (
+    JiraApiError,
+    JiraClient,
+    JiraConfigError,
+    jira_browse_url,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _debug(message: str, *args) -> None:
+    text = message % args if args else message
+    print(text, flush=True)
+
+
+def _debug_exception(message: str, *args) -> None:
+    _debug(message, *args)
+    logger.exception(message, *args)
 
 
 def _format_history(prior_history: list[dict]) -> str:
@@ -42,12 +63,57 @@ def _format_history(prior_history: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _enum_value(value: Any) -> Any:
+    return getattr(value, "value", value)
+
+
+def _clean_ticket_text(text: str) -> str:
+    text = re.sub(r"^\s*(?:[-*]|\d+\.)\s*", "", text.strip())
+    return text.replace("**", "").strip()
+
+
+def _split_ticket_content(ticket_content: str) -> tuple[str, str]:
+    lines = [line.strip() for line in ticket_content.splitlines() if line.strip()]
+    if not lines:
+        return "Feedback ticket", ""
+
+    title = ""
+    description_lines = []
+    in_description = False
+
+    for line in lines:
+        cleaned = _clean_ticket_text(line)
+        label, separator, value = cleaned.partition(":")
+        normalized_label = label.lower().strip()
+
+        if separator and normalized_label in {"title", "summary"}:
+            title = value.strip()
+            in_description = False
+            continue
+
+        if separator and normalized_label == "description":
+            in_description = True
+            if value.strip():
+                description_lines.append(value.strip())
+            continue
+
+        if in_description:
+            description_lines.append(cleaned)
+
+    if not title:
+        title = _clean_ticket_text(lines[0])
+
+    description = "\n".join(description_lines).strip() or ticket_content.strip()
+    return title[:255] or "Feedback ticket", description
+
+
 def build_workflow(
     checkpointer: Any = None, graph_config: dict = {}
 ) -> "SmartFeedbackWorkflow":
     """Construct a SmartFeedbackWorkflow with the correct chat model for the current config."""
     from config import MOCK_MODE
 
+    _debug("[workflow] build_workflow mock_mode=%s graph_config=%s", MOCK_MODE, graph_config)
     if MOCK_MODE:
         chat_model = _build_mock_chat_model()
     else:
@@ -248,16 +314,29 @@ class SmartFeedbackWorkflow:
         self._workflow = workflow.compile(checkpointer=self.checkpointer)
 
     def analysis_rag_results(self, state: SmartFeedbackState):
+        _debug(
+            "[workflow] node=analysis_rag_results analysis=%s rag_count=%s",
+            bool(state.get("analysis_agent_result")),
+            len(state.get("rag_results", [])),
+        )
         return state
 
     def _route_engagement(self, state: SmartFeedbackState) -> str:
         # Phase 1: Check if clarification is needed
         if state.get("analysis_agent_result") is None:
-            return "clarify" if state.get("needs_clarification", False) else "proceed"
+            route = "clarify" if state.get("needs_clarification", False) else "proceed"
+            _debug(
+                "[workflow] route=engagement phase=1 needs_clarification=%s -> %s",
+                state.get("needs_clarification", False),
+                route,
+            )
+            return route
         # If we reach here, it's Phase 2 (RAG results are available)
         if state.get("rag_results", []) and state.get("engagement_response", ""):
+            _debug("[workflow] route=engagement phase=2 -> rag_user_assessment")
             return "rag_user_assessment"
 
+        _debug("[workflow] route=engagement fallback -> proceed")
         return "proceed"  # Proceed to create_ticket (fan-out)
 
     def _route_rag_results(self, state: SmartFeedbackState) -> str:
@@ -268,7 +347,15 @@ class SmartFeedbackWorkflow:
             and max((r.get("score", 0.0) for r in results), default=0.0)
             >= RELEVANCE_THRESHOLD
         )
-        return "respond" if rag_sufficient else "triage"
+        route = "respond" if rag_sufficient else "triage"
+        _debug(
+            "[workflow] route=rag_results rag_count=%s max_score=%s threshold=%s -> %s",
+            len(results),
+            max((r.get("score", 0.0) for r in results), default=0.0),
+            RELEVANCE_THRESHOLD,
+            route,
+        )
+        return route
 
     def _route_engagement_phase2(self, state: SmartFeedbackState) -> str:
         # Phase 2: Check if RAG was sufficient (already handled in _route_rag_results)
@@ -279,9 +366,12 @@ class SmartFeedbackWorkflow:
             and max((r.get("score", 0.0) for r in results), default=0.0)
             >= RELEVANCE_THRESHOLD
         )
-        return "respond" if rag_sufficient else "triage"
+        route = "respond" if rag_sufficient else "triage"
+        _debug("[workflow] route=engagement_phase2 -> %s", route)
+        return route
 
     def rag_result_user_assessment(self, state: SmartFeedbackState):
+        _debug("[workflow] node=rag_result_user_assessment start")
         rag_answer = state.get("engagement_response", "")
         prompt = (
             f"{rag_answer}\n\nDoes this answer your question? (yes / no)"
@@ -302,12 +392,27 @@ class SmartFeedbackWorkflow:
             updated_state["rag_results"] = []
             updated_state["analysis_agent_result"] = None
         updated_state["rag_user_assessment"] = response.lower()
+        _debug(
+            "[workflow] node=rag_result_user_assessment response=%s",
+            response.lower(),
+        )
         return updated_state
 
     def _route_rag_user_assessment(self, state: SmartFeedbackState):
-        return "yes" if state.get("rag_user_assessment") == "yes" else "no"
+        route = "yes" if state.get("rag_user_assessment") == "yes" else "no"
+        _debug(
+            "[workflow] route=rag_user_assessment value=%s -> %s",
+            state.get("rag_user_assessment"),
+            route,
+        )
+        return route
 
     def engagement_with_user(self, state: SmartFeedbackState) -> dict:
+        _debug(
+            "[workflow] node=engagement_with_user start phase=%s first_message=%s",
+            "2" if state.get("analysis_agent_result") is not None else "1",
+            state.get("is_first_message", True),
+        )
         if state.get("analysis_agent_result") is not None:
             # Phase 2: compose answer from RAG context
             rag_results = state.get("rag_results", [])
@@ -324,6 +429,10 @@ class SmartFeedbackWorkflow:
                     "conversation_history": conversation_history,
                 }
             )
+            _debug(
+                "[workflow] node=engagement_with_user phase=2 response_length=%s",
+                len(response.content or ""),
+            )
             return {
                 "engagement_response": response.content,
                 "chat_history": [response],
@@ -338,7 +447,13 @@ class SmartFeedbackWorkflow:
                 | self.chat_model.with_structured_output(EngagementDecision)
             )
             decision: EngagementDecision = chain.invoke({"user_query": answer})
+            _debug(
+                "[workflow] node=engagement_with_user phase=1 decision needs_clarification=%s response_length=%s",
+                decision.needs_clarification,
+                len(decision.response or ""),
+            )
         else:
+            _debug("[workflow] node=engagement_with_user waiting for clarification interrupt")
             answer = interrupt("Please clarify your request.")
             state["user_query"] = answer
             chain = (
@@ -350,6 +465,11 @@ class SmartFeedbackWorkflow:
                     "user_query": answer,
                     "conversation_history": state["chat_history"],
                 }
+            )
+            _debug(
+                "[workflow] node=engagement_with_user followup decision needs_clarification=%s response_length=%s",
+                decision.needs_clarification,
+                len(decision.response or ""),
             )
 
         return {
@@ -365,17 +485,29 @@ class SmartFeedbackWorkflow:
 
     def rag_search_workflow(self, state: SmartFeedbackState) -> dict:
 
+        _debug("[workflow] node=rag_search_workflow start")
         results: list[dict] = self._rag_agent.search(query=state["user_query"], top_k=3)
+        _debug("[workflow] node=rag_search_workflow results=%s", len(results))
         return {"rag_results": results}
 
     def analysis_agent(self, state: SmartFeedbackState) -> dict:
+        _debug("[workflow] node=analysis_agent start")
         chain = chat_template_analysis_agent | self.chat_model.with_structured_output(
             AnalysisAgentResult
         )
         result: AnalysisAgentResult = chain.invoke({"user_query": state["user_query"]})
+        _debug(
+            "[workflow] node=analysis_agent result intent=%s sentiment=%s urgency=%s issue_type=%s language=%s",
+            _enum_value(result.intent),
+            _enum_value(result.sentiment),
+            _enum_value(result.urgency),
+            _enum_value(result.issue_type),
+            _enum_value(result.language),
+        )
         return {"analysis_agent_result": result}
 
     def create_ticket(self, state: SmartFeedbackState) -> dict:
+        _debug("[workflow] node=create_ticket start")
         # Build a plain-text summary from the full conversation so far.
         # Structured fields (severity, intent, etc.) will be added here later
         # once analysis_agent results are wired through.
@@ -384,33 +516,46 @@ class SmartFeedbackWorkflow:
             role = "User" if msg.get("sender") == "user" else "Agent"
             lines.append(f"{role}: {msg.get('content', '')}")
         lines.append(f"User: {state['user_query']}")
+        _debug("[workflow] node=create_ticket summary_lines=%s", len(lines))
         return {"ticket_summary": "\n".join(lines)}
 
     ###
     ### Triage
     ###
     def human_ticket_assessment(self, state: SmartFeedbackState) -> SmartFeedbackState:
+        _debug("[workflow] node=human_ticket_assessment waiting for interrupt")
         assessment = interrupt(
             f"Please review the ticket answer one of the following options: {', '.join([i.value for i in HumanAssessment])}"
         )
         if assessment in [i.value for i in HumanAssessment]:
+            _debug("[workflow] node=human_ticket_assessment assessment=%s", assessment)
             return {"human_assessment": assessment}
+        _debug(
+            "[workflow] node=human_ticket_assessment invalid assessment=%s default=%s",
+            assessment,
+            HumanAssessment.OK,
+        )
         return {"human_assessment": HumanAssessment.OK}
 
     def add_additional_information_to_ticket(self, state: SmartFeedbackState) -> str:
+        _debug("[workflow] node=add_additional_information_to_ticket waiting for interrupt")
         user_comment = interrupt("Please add you comment to the ticket")
         final_ticket_content = (
             state.get("ticket_summary") + f"\nUSER COMMENT:\n{user_comment}"
         )
         return {
             "ticket_summary": final_ticket_content,
+            "ticket_content": final_ticket_content,
             "chat_history": HumanMessage(user_comment),
         }
 
     def route_human_assessment(self, state: SmartFeedbackState) -> str:
-        return state.get("human_assessment", HumanAssessment.OK)
+        route = state.get("human_assessment", HumanAssessment.OK)
+        _debug("[workflow] route=human_assessment -> %s", route)
+        return route
 
     def rag_response_ok(self, state: SmartFeedbackState) -> SmartFeedbackState:
+        _debug("[workflow] node=rag_response_ok start")
         rag_response_ok_chain = chat_template_rag_ok_response | self.chat_model
         rag_ok = rag_response_ok_chain.invoke(
             {
@@ -421,6 +566,7 @@ class SmartFeedbackWorkflow:
         return {"final_user_response": rag_ok.content, "chat_history": rag_ok}
 
     def triage_request(self, state: SmartFeedbackState) -> SmartFeedbackState:
+        _debug("[workflow] node=triage_request start")
         # Reset the judge iteration counter for a new triage flow
         self._judge_current_iteration = 0
 
@@ -445,6 +591,11 @@ class SmartFeedbackWorkflow:
                 "chat_history": "\n".join(only_user_interactions),
                 "judge_feedback": judge_feedback,
             }
+        )
+        _debug(
+            "[workflow] node=triage_request assessment severity=%s team=%s",
+            incident_assessment.severity,
+            _enum_value(incident_assessment.support_team),
         )
         return {"incident_assessment": [incident_assessment]}
 
@@ -471,11 +622,18 @@ class SmartFeedbackWorkflow:
 
     def route_judge(self, state: SmartFeedbackState) -> str:
         if self._judge_current_iteration >= self.judge_max_iterations:
+            _debug(
+                "[workflow] route=judge max_iterations reached=%s -> %s",
+                self._judge_current_iteration,
+                TriageJudgeDecision.OK,
+            )
             return TriageJudgeDecision.OK  # Force exit
         latest_judge = state.get("incident_assessment_judge", [])[-1]
+        _debug("[workflow] route=judge -> %s", latest_judge.overall_assessment)
         return latest_judge.overall_assessment
 
     def formulate_ticket_content(self, state: SmartFeedbackState) -> SmartFeedbackState:
+        _debug("[workflow] node=formulate_ticket_content start")
         ticket_content_chain = chat_template_ticket_creation | self.chat_model
         only_user_interactions = [
             i.content for i in state.get("chat_history") if isinstance(i, HumanMessage)
@@ -489,8 +647,14 @@ class SmartFeedbackWorkflow:
                 "chat_history": "\n".join(only_user_interactions),
             }
         )
+        ticket_content_text = ticket_content.content
+        _debug(
+            "[workflow] node=formulate_ticket_content content_length=%s",
+            len(ticket_content_text or ""),
+        )
         return {
-            "ticket_summary": ticket_content.content,
+            "ticket_summary": ticket_content_text,
+            "ticket_content": ticket_content_text,
             "chat_history": [ticket_content],
         }
 
@@ -502,15 +666,107 @@ class SmartFeedbackWorkflow:
         return state
 
     def generate_ticket_created_response(self, state: SmartFeedbackState):
+        _debug(
+            "[workflow] node=generate_ticket_created_response ticket_id=%s",
+            state.get("ticket_id"),
+        )
         return {
             "final_user_response": f"Ticket with id {state.get('ticket_id')} was successfully created!"
         }
 
     def add_ticket_to_jira(self, state: SmartFeedbackState):
-        # TODO: add logic to add ticket to jira board
-        pass
+        _debug("[workflow] node=add_ticket_to_jira start")
+        ticket_summary = state.get("ticket_summary") or ""
+        summary, description = _split_ticket_content(ticket_summary)
+        _debug(
+            "[workflow] node=add_ticket_to_jira parsed summary_length=%s description_length=%s",
+            len(summary or ""),
+            len(description or ""),
+        )
+
+        incident_assessments = state.get("incident_assessment") or []
+        incident_assessment = incident_assessments[-1] if incident_assessments else None
+        analysis_result = state.get("analysis_agent_result")
+        thread_id = (
+            self.graph_config.get("configurable", {}).get("thread_id")
+            if self.graph_config
+            else None
+        )
+
+        severity = _enum_value(getattr(incident_assessment, "severity", None))
+        priority_by_severity = {1: "Low", 2: "Medium", 3: "High"}
+
+        labels = ["source_smart_feedback"]
+        if analysis_result:
+            labels.extend(
+                [
+                    f"intent_{_enum_value(analysis_result.intent)}",
+                    f"sentiment_{_enum_value(analysis_result.sentiment)}",
+                    f"urgency_{_enum_value(analysis_result.urgency)}",
+                    f"issue_{_enum_value(analysis_result.issue_type)}",
+                    f"language_{_enum_value(analysis_result.language)}",
+                ]
+            )
+        if severity:
+            labels.append(f"severity_{severity}")
+
+        record = {
+            "case_id": state.get("ticket_id")
+            or (f"CHAT-{thread_id}" if thread_id else ""),
+            "summary": summary,
+            "description": description,
+            "issue_type": (
+                _enum_value(analysis_result.issue_type)
+                if analysis_result
+                else "feedback"
+            ),
+            "priority": priority_by_severity.get(severity, "Medium"),
+            "team": _enum_value(getattr(incident_assessment, "support_team", "support")),
+            "labels": labels,
+            "recommended_action": getattr(incident_assessment, "recommended_action", ""),
+        }
+
+        try:
+            issue = JiraClient().create_issue(record)
+        except (JiraConfigError, JiraApiError) as error:
+            _debug_exception("[workflow] node=add_ticket_to_jira failed: %s", error)
+            return {
+                "final_user_response": (
+                    "Your ticket was prepared, but I could not create it in Jira. "
+                    f"Reason: {error}"
+                )
+            }
+
+        issue_key = issue.get("key") or ""
+        issue_id = issue.get("id") or issue_key
+        jira_url = jira_browse_url(issue_key) if issue_key else ""
+        response = (
+            f"Ticket {issue_key} was successfully created in Jira!"
+            if issue_key
+            else "Ticket was successfully created in Jira!"
+        )
+        _debug(
+            "[workflow] node=add_ticket_to_jira created issue_id=%s issue_key=%s",
+            issue_id,
+            issue_key,
+        )
+
+        return {
+            "ticket_id": issue_key or issue_id,
+            "final_user_response": response,
+            "jira_ticket": {
+                "id": issue_id,
+                "key": issue_key,
+                "url": jira_url,
+            },
+        }
 
     def end_node(self, state: SmartFeedbackState):
+        _debug(
+            "[workflow] node=end_node final_response=%s ticket_id=%s",
+            bool(state.get("final_user_response")),
+            state.get("ticket_id"),
+        )
         return state
 
     # Public entry point
@@ -525,6 +781,9 @@ class SmartFeedbackWorkflow:
             "rag_workflow_state": {},
             "triage_workflow_state": {},
             "engagement_response": "",
+            "ticket_summary": "",
+            "ticket_content": "",
+            "jira_ticket": {},
         }
 
         if stream:
