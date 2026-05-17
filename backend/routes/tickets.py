@@ -53,6 +53,8 @@ def _ticket_dto(ticket: Ticket, messages: list[Message]) -> dict[str, Any]:
         "status": ticket.status,
         "labels": ticket.labels or [],
         "recommendedAction": ticket.recommended_action,
+        "response": ticket.response,
+        "responseComments": ticket.response_comments or [],
         "createdAt": ticket.created_at.isoformat() if ticket.created_at else None,
         "updatedAt": ticket.updated_at.isoformat() if ticket.updated_at else None,
         "messages": [_message_dto(m) for m in messages],
