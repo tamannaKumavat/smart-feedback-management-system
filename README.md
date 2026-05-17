@@ -136,3 +136,16 @@ For automatic updates, configure a Jira webhook that points to:
 POST http://your-public-backend-url/api/jira/webhook
 Secret: choose-a-shared-secret
 ```
+
+When running locally, expose the backend with ngrok while the backend is
+running on port 8000:
+
+```bash
+ngrok http 8000
+```
+
+Use the forwarding URL from ngrok as the Jira webhook URL:
+
+```text
+https://your-ngrok-url.ngrok-free.dev/api/jira/webhook
+```
