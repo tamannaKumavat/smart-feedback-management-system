@@ -19,6 +19,8 @@ WATSONX_URL = os.getenv("WATSONX_URL", "https://eu-de.ml.cloud.ibm.com")
 WATSONX_MODEL_ID = os.getenv("WATSONX_MODEL_ID", "ibm/granite-3-8b-instruct")
 WATSONX_EMBEDDING_MODEL_ID = os.getenv("WATSONX_EMBEDDING_MODEL_ID", "ibm/granite-embedding-278m-multilingual")
 MOCK_MODE = os.getenv("MOCK_MODE", "true").lower() == "true"
+RAG_RELEVANCE_THRESHOLD = float(os.getenv("RAG_RELEVANCE_THRESHOLD", "0.75"))
+RAG_KEYWORD_FALLBACK_SCORE = float(os.getenv("RAG_KEYWORD_FALLBACK_SCORE", "0.35"))
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",

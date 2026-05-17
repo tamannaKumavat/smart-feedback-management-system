@@ -4,6 +4,8 @@ from sqlalchemy import text
 
 from config import (
     MOCK_MODE,
+    RAG_KEYWORD_FALLBACK_SCORE,
+    RAG_RELEVANCE_THRESHOLD,
     WATSONX_API_KEY,
     WATSONX_EMBEDDING_MODEL_ID,
     WATSONX_PROJECT_ID,
@@ -15,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Minimum cosine similarity to consider a question "already answered".
 # Below this threshold the triage agent takes over.
-RELEVANCE_THRESHOLD = 0.5
+RELEVANCE_THRESHOLD = RAG_RELEVANCE_THRESHOLD
 
 
 class RAGAgent:
@@ -147,12 +149,13 @@ class RAGAgent:
                 department,
                 severity,
                 intent,
-                0.6 AS score,
+                :fallback_score AS score,
                 'keyword' AS matched_on
             FROM rag_chunks
             WHERE {like_clauses}
             LIMIT :top_k
         """)
+        params["fallback_score"] = RAG_KEYWORD_FALLBACK_SCORE
 
         db = SessionLocal()
         try:
