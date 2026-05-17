@@ -86,6 +86,8 @@ async def websocket_endpoint(
         prior_msgs = [{"sender": m.sender, "content": m.content} for m in history]
 
         initial_state = {
+            "issue_id": issue.id,
+            "user_id": user.id,
             "user_query": "",
             "prior_history": prior_msgs,
             "chat_history": [],
@@ -100,7 +102,9 @@ async def websocket_endpoint(
             "triage_workflow": {},
             "engagement_response": "",
             "ready_to_create_ticket": False,
+            "ticket_summary": "",
             "ticket_content": "",
+            "jira_ticket": {},
             "final_user_response": "",
         }
 
@@ -173,7 +177,7 @@ async def websocket_endpoint(
 
                         # Create ticket in DB if the triage path ran
                         ticket_content = end_state.get("ticket_content", "")
-                        if ticket_content:
+                        if ticket_content and not end_state.get("ticket_id"):
                             ticket = Ticket(
                                 issue_id=issue.id,
                                 user_id=user.id,

@@ -33,6 +33,8 @@ from workflows.triage.constants import (
     TriageJudgeDecision,
     HumanAssessment,
 )
+from db import SessionLocal
+from models.chat import TICKET_STATUS_NEW, Ticket
 from services.jira_sync import (
     JiraApiError,
     JiraClient,
@@ -69,7 +71,21 @@ def _enum_value(value: Any) -> Any:
 
 def _clean_ticket_text(text: str) -> str:
     text = re.sub(r"^\s*(?:[-*]|\d+\.)\s*", "", text.strip())
+    text = re.sub(r"^#{1,6}\s*", "", text)
     return text.replace("**", "").strip()
+
+
+def _ticket_label_and_value(line: str) -> tuple[str, str] | None:
+    cleaned = _clean_ticket_text(line)
+    match = re.match(r"^\*{0,2}\s*([A-Za-z][A-Za-z /_-]{0,60})\s*\*{0,2}\s*[:：]\s*(.*)$", cleaned)
+    if not match:
+        return None
+    return match.group(1).strip().lower(), match.group(2).strip()
+
+
+def _is_ticket_heading(line: str) -> bool:
+    cleaned = _clean_ticket_text(line).lower()
+    return cleaned in {"support ticket", "ticket", "jira ticket"}
 
 
 def _split_ticket_content(ticket_content: str) -> tuple[str, str]:
@@ -80,31 +96,108 @@ def _split_ticket_content(ticket_content: str) -> tuple[str, str]:
     title = ""
     description_lines = []
     in_description = False
+    seen_description = False
 
     for line in lines:
-        cleaned = _clean_ticket_text(line)
-        label, separator, value = cleaned.partition(":")
-        normalized_label = label.lower().strip()
-
-        if separator and normalized_label in {"title", "summary"}:
-            title = value.strip()
-            in_description = False
+        if _is_ticket_heading(line):
             continue
 
-        if separator and normalized_label == "description":
-            in_description = True
-            if value.strip():
-                description_lines.append(value.strip())
+        label_value = _ticket_label_and_value(line)
+        if label_value:
+            label, value = label_value
+
+            if label in {"title", "summary"}:
+                title = value
+                in_description = False
+                continue
+
+            if label == "description":
+                in_description = True
+                seen_description = True
+                if value:
+                    description_lines.append(value)
+                continue
+
+            # Once the description section has started, keep useful subsection
+            # labels but drop the raw markdown/bold scaffolding.
+            if in_description or seen_description:
+                formatted = f"{label.replace('_', ' ').title()}: {value}".strip()
+                description_lines.append(formatted)
+                continue
+
             continue
 
         if in_description:
-            description_lines.append(cleaned)
+            description_lines.append(_clean_ticket_text(line))
 
     if not title:
-        title = _clean_ticket_text(lines[0])
+        title = next(
+            (
+                _clean_ticket_text(line)
+                for line in lines
+                if not _is_ticket_heading(line)
+            ),
+            "Feedback ticket",
+        )
 
-    description = "\n".join(description_lines).strip() or ticket_content.strip()
+    description = "\n".join(description_lines).strip()
+    if not description:
+        description = "\n".join(
+            _clean_ticket_text(line)
+            for line in lines
+            if not _is_ticket_heading(line)
+        ).strip()
     return title[:255] or "Feedback ticket", description
+
+
+def _ticket_record_from_state(
+    state: SmartFeedbackState,
+    graph_config: dict | None = None,
+) -> dict[str, Any]:
+    ticket_summary = state.get("ticket_summary") or state.get("ticket_content") or ""
+    summary, description = _split_ticket_content(ticket_summary)
+
+    incident_assessments = state.get("incident_assessment") or []
+    incident_assessment = incident_assessments[-1] if incident_assessments else None
+    analysis_result = state.get("analysis_agent_result")
+    thread_id = (
+        graph_config.get("configurable", {}).get("thread_id")
+        if graph_config
+        else None
+    )
+
+    severity = _enum_value(getattr(incident_assessment, "severity", None))
+    priority_by_severity = {1: "Low", 2: "Medium", 3: "High"}
+
+    labels = ["source_smart_feedback"]
+    if analysis_result:
+        labels.extend(
+            [
+                f"intent_{_enum_value(analysis_result.intent)}",
+                f"sentiment_{_enum_value(analysis_result.sentiment)}",
+                f"urgency_{_enum_value(analysis_result.urgency)}",
+                f"issue_{_enum_value(analysis_result.issue_type)}",
+                f"language_{_enum_value(analysis_result.language)}",
+            ]
+        )
+    if severity:
+        labels.append(f"severity_{severity}")
+
+    return {
+        "case_id": state.get("ticket_id")
+        or (f"CHAT-{thread_id}" if thread_id else ""),
+        "summary": summary,
+        "description": description,
+        "issue_type": (
+            _enum_value(analysis_result.issue_type)
+            if analysis_result
+            else "feedback"
+        ),
+        "priority": priority_by_severity.get(severity, "Medium"),
+        "team": _enum_value(getattr(incident_assessment, "support_team", "support")),
+        "labels": labels,
+        "recommended_action": getattr(incident_assessment, "recommended_action", ""),
+    }
 
 
 def build_workflow(
@@ -175,6 +268,17 @@ def _build_mock_chat_model():
                                 init_kwargs[field_name] = list(ann)[0]
                             elif hasattr(ann, "__args__"):
                                 init_kwargs[field_name] = ann.__args__[0]
+                            elif ann is str:
+                                init_kwargs[field_name] = (
+                                    "[MOCK] Thank you for sharing that. I have enough "
+                                    "information to continue."
+                                )
+                            elif ann is bool:
+                                init_kwargs[field_name] = False
+                            elif ann is int:
+                                init_kwargs[field_name] = 0
+                            elif ann is float:
+                                init_kwargs[field_name] = 0.0
                     return schema(**init_kwargs)
 
             return RunnableLambda(build_default)
@@ -659,11 +763,38 @@ class SmartFeedbackWorkflow:
         }
 
     def update_ticket(self, state: SmartFeedbackState) -> SmartFeedbackState:
-        """TODO: How do we handle created tickets? Do we save them in the database so we can use them in the future
-        as responses?
-        """
-        print("TODO: Adding ticket to database - for future use")
-        return state
+        issue_id = state.get("issue_id")
+        user_id = state.get("user_id")
+        if not issue_id or not user_id:
+            _debug(
+                "[workflow] node=update_ticket skipped missing issue_id/user_id issue_id=%s user_id=%s",
+                issue_id,
+                user_id,
+            )
+            return state
+
+        record = _ticket_record_from_state(state, self.graph_config)
+        db = SessionLocal()
+        try:
+            ticket = Ticket(
+                issue_id=issue_id,
+                user_id=user_id,
+                summary=record["summary"],
+                description=record["description"],
+                issue_type=record["issue_type"],
+                priority=record["priority"],
+                team=record["team"],
+                status=TICKET_STATUS_NEW,
+                labels=record["labels"],
+                recommended_action=record["recommended_action"],
+            )
+            db.add(ticket)
+            db.commit()
+            db.refresh(ticket)
+            _debug("[workflow] node=update_ticket saved ticket_id=%s", ticket.id)
+            return {"ticket_id": ticket.id}
+        finally:
+            db.close()
 
     def generate_ticket_created_response(self, state: SmartFeedbackState):
         _debug(
@@ -676,55 +807,12 @@ class SmartFeedbackWorkflow:
 
     def add_ticket_to_jira(self, state: SmartFeedbackState):
         _debug("[workflow] node=add_ticket_to_jira start")
-        ticket_summary = state.get("ticket_summary") or ""
-        summary, description = _split_ticket_content(ticket_summary)
+        record = _ticket_record_from_state(state, self.graph_config)
         _debug(
             "[workflow] node=add_ticket_to_jira parsed summary_length=%s description_length=%s",
-            len(summary or ""),
-            len(description or ""),
+            len(record["summary"] or ""),
+            len(record["description"] or ""),
         )
-
-        incident_assessments = state.get("incident_assessment") or []
-        incident_assessment = incident_assessments[-1] if incident_assessments else None
-        analysis_result = state.get("analysis_agent_result")
-        thread_id = (
-            self.graph_config.get("configurable", {}).get("thread_id")
-            if self.graph_config
-            else None
-        )
-
-        severity = _enum_value(getattr(incident_assessment, "severity", None))
-        priority_by_severity = {1: "Low", 2: "Medium", 3: "High"}
-
-        labels = ["source_smart_feedback"]
-        if analysis_result:
-            labels.extend(
-                [
-                    f"intent_{_enum_value(analysis_result.intent)}",
-                    f"sentiment_{_enum_value(analysis_result.sentiment)}",
-                    f"urgency_{_enum_value(analysis_result.urgency)}",
-                    f"issue_{_enum_value(analysis_result.issue_type)}",
-                    f"language_{_enum_value(analysis_result.language)}",
-                ]
-            )
-        if severity:
-            labels.append(f"severity_{severity}")
-
-        record = {
-            "case_id": state.get("ticket_id")
-            or (f"CHAT-{thread_id}" if thread_id else ""),
-            "summary": summary,
-            "description": description,
-            "issue_type": (
-                _enum_value(analysis_result.issue_type)
-                if analysis_result
-                else "feedback"
-            ),
-            "priority": priority_by_severity.get(severity, "Medium"),
-            "team": _enum_value(getattr(incident_assessment, "support_team", "support")),
-            "labels": labels,
-            "recommended_action": getattr(incident_assessment, "recommended_action", ""),
-        }
 
         try:
             issue = JiraClient().create_issue(record)
@@ -772,6 +860,8 @@ class SmartFeedbackWorkflow:
     # Public entry point
     def run(self, user_query: str, is_first_message: bool = True, stream: bool = False):
         initial_state: SmartFeedbackState = {
+            "issue_id": "",
+            "user_id": "",
             "user_query": user_query,
             "chat_history": [],
             "needs_clarification": False,

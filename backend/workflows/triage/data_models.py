@@ -49,6 +49,8 @@ class IncidentAssessmentJudge(BaseModel):
 
 
 class TriageState(TypedDict):
+    issue_id: str
+    user_id: str
     user_query: str
     final_user_response: str = ""
     rag_results: list = []

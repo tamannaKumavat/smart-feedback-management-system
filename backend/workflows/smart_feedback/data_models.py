@@ -59,6 +59,8 @@ class AnalysisAgentResult(BaseModel):
 
 
 class SmartFeedbackState(TypedDict):
+    issue_id: str
+    user_id: str
     user_query: str
     prior_history: list  # [{sender, content}] from DB — conversation so far
     chat_history: Annotated[list, add_messages]

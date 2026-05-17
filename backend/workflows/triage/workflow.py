@@ -3,6 +3,9 @@ from langgraph.graph import END, START, StateGraph
 from typing import Any
 from langgraph.types import interrupt
 
+from db import SessionLocal
+from models.chat import TICKET_STATUS_NEW, Ticket
+
 from workflows.triage.data_models import (
     TriageState,
     IncidentAssessment,
@@ -19,6 +22,53 @@ from workflows.triage.constants import (
     TriageJudgeDecision,
     HumanAssessment,
 )
+
+
+def _enum_value(value: Any) -> Any:
+    return getattr(value, "value", value)
+
+
+def _clean_ticket_text(text: str) -> str:
+    return text.strip().replace("**", "")
+
+
+def _split_ticket_content(ticket_content: str) -> tuple[str, str]:
+    lines = [line.strip() for line in ticket_content.splitlines() if line.strip()]
+    if not lines:
+        return "Feedback ticket", ""
+
+    title = ""
+    description_lines = []
+    in_description = False
+
+    for line in lines:
+        cleaned = _clean_ticket_text(line)
+        label, separator, value = cleaned.partition(":")
+        normalized_label = label.lower().strip().lstrip("0123456789. ")
+        if separator and normalized_label in {"title", "summary"}:
+            title = value.strip()
+            in_description = False
+            continue
+        if separator and normalized_label == "description":
+            in_description = True
+            if value.strip():
+                description_lines.append(value.strip())
+            continue
+        if in_description:
+            description_lines.append(cleaned)
+
+    if not title:
+        title = _clean_ticket_text(lines[0])
+
+    description = "\n".join(description_lines).strip() or ticket_content.strip()
+    return title[:255] or "Feedback ticket", description
+
+
+def _latest_assessment(state: dict) -> IncidentAssessment | None:
+    assessment = state.get("incident_assessment")
+    if isinstance(assessment, list):
+        return assessment[-1] if assessment else None
+    return assessment
 
 
 class TriageWorkflow:
@@ -187,11 +237,41 @@ class TriageWorkflow:
         return {"ticket_content": ticket_content.content, "chat_history": ticket_content}
 
     def update_ticket(self, state: TriageState) -> TriageState:
-        """TODO: How do we handle created tickets? Do we save them in the database so we can use them in the future
-        as responses?
-        """
-        print("TODO: Adding ticket to database - for future use")
-        return state
+        issue_id = state.get("issue_id")
+        user_id = state.get("user_id")
+        if not issue_id or not user_id:
+            print(
+                f"[triage] update_ticket skipped missing issue_id/user_id issue_id={issue_id} user_id={user_id}",
+                flush=True,
+            )
+            return state
+
+        summary, description = _split_ticket_content(state.get("ticket_content", ""))
+        assessment = _latest_assessment(state)
+        severity = getattr(assessment, "severity", None)
+        priority_by_severity = {1: "Low", 2: "Medium", 3: "High"}
+
+        db = SessionLocal()
+        try:
+            ticket = Ticket(
+                issue_id=issue_id,
+                user_id=user_id,
+                summary=summary,
+                description=description,
+                issue_type="feedback",
+                priority=priority_by_severity.get(severity, "Medium"),
+                team=_enum_value(getattr(assessment, "support_team", "support")),
+                status=TICKET_STATUS_NEW,
+                labels=[f"severity_{severity}"] if severity else [],
+                recommended_action=getattr(assessment, "recommended_action", ""),
+            )
+            db.add(ticket)
+            db.commit()
+            db.refresh(ticket)
+            print(f"[triage] update_ticket saved ticket_id={ticket.id}", flush=True)
+            return {"ticket_id": ticket.id}
+        finally:
+            db.close()
 
     def generate_ticket_created_response(self, state: TriageState):
         return {
@@ -201,12 +281,23 @@ class TriageWorkflow:
     def run(self, user_query: str, rag_results: list = [], stream: bool = False):
         if stream:
             for chunk in self._workflow.stream(
-                {"user_query": user_query, "rag_results": rag_results}, config=self.graph_config
+                {
+                    "issue_id": "",
+                    "user_id": "",
+                    "user_query": user_query,
+                    "rag_results": rag_results,
+                },
+                config=self.graph_config
             ):
                 print(chunk)
         else:
             final_result = self._workflow.invoke(
-                {"user_query": user_query, "rag_results": rag_results},
+                {
+                    "issue_id": "",
+                    "user_id": "",
+                    "user_query": user_query,
+                    "rag_results": rag_results,
+                },
                 config=self.graph_config,
             )
             return final_result
