@@ -19,12 +19,17 @@ from config import (
     JIRA_EMAIL,
     JIRA_FIELD_FEEDBACK_ISSUE_TYPE_ID,
     JIRA_FIELD_RECOMMENDED_ACTION_ID,
+    JIRA_FIELD_SEVERITY_ID,
     JIRA_FIELD_SOURCE_CASE_ID,
     JIRA_FIELD_TEAM_ID,
+    JIRA_FIELD_URGENCY_ID,
     JIRA_PROJECT_KEY,
+    JIRA_TEAM_ID_SECURITY,
+    JIRA_TEAM_ID_SOFTWARE_DEVELOPMENT,
+    JIRA_TEAM_ID_SUPPORT,
 )
 from db import SessionLocal
-from models.chat import Ticket
+from models.chat import Issue, Ticket
 from services.ticket_rag_ingest import is_done_status, upsert_done_ticket_rag_chunk
 
 DATASET_PATH = Path(__file__).resolve().parents[1] / "data" / "jira_ticket_dataset.json"
@@ -126,6 +131,12 @@ def add_adf_custom_field(fields: dict[str, Any], field_id: str, value: Any) -> N
         fields[field_id] = text_to_adf(str(value))
 
 
+def add_team_custom_field(fields: dict[str, Any], field_id: str, value: Any) -> None:
+    team_id = team_field_value(value)
+    if field_id and team_id:
+        fields[field_id] = team_id
+
+
 def read_custom_field_value(value: Any) -> Any:
     if isinstance(value, dict) and value.get("type") == "doc":
         return adf_to_text(value).strip()
@@ -186,6 +197,53 @@ def named_items(items: list[dict[str, Any]] | None) -> list[str]:
     return [item.get("name") for item in items if item.get("name")]
 
 
+def label_value(labels: list[str] | None, prefix: str) -> str | None:
+    for label in labels or []:
+        if isinstance(label, str) and label.startswith(prefix):
+            return label.removeprefix(prefix)
+    return None
+
+
+def severity_field_value(record: dict[str, Any]) -> str | None:
+    severity = record.get("severity") or label_value(record.get("labels"), "severity_")
+    if severity in {None, ""}:
+        return None
+    severity = str(severity)
+    severity_by_level = {"1": "Low", "2": "Medium", "3": "High"}
+    severity_by_s_level = {"S1": "High", "S2": "Medium", "S3": "Low"}
+    if severity.upper() in severity_by_s_level:
+        return severity_by_s_level[severity.upper()]
+    if severity in severity_by_level:
+        return severity_by_level[severity]
+    return severity.capitalize()
+
+
+def urgency_field_value(record: dict[str, Any]) -> str | None:
+    urgency = record.get("urgency") or label_value(record.get("labels"), "urgency_")
+    if urgency in {None, ""}:
+        return None
+    return str(urgency).capitalize()
+
+
+def team_field_value(value: Any) -> str | None:
+    if value in {None, ""}:
+        return None
+
+    team = str(value).strip()
+    team_ids = {
+        "support": JIRA_TEAM_ID_SUPPORT,
+        "software_development": JIRA_TEAM_ID_SOFTWARE_DEVELOPMENT,
+        "security": JIRA_TEAM_ID_SECURITY,
+    }
+    if team in team_ids:
+        return team_ids[team] or None
+
+    # Jira's Atlassian Team field expects the Team ID directly.
+    if re.fullmatch(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", team):
+        return team
+    return None
+
+
 def issue_fields_from_record(record: dict[str, Any]) -> dict[str, Any]:
     labels = [sanitize_label(label) for label in record.get("labels", [])]
     labels = [label for label in labels if label]
@@ -207,12 +265,14 @@ def issue_fields_from_record(record: dict[str, Any]) -> dict[str, Any]:
         JIRA_FIELD_FEEDBACK_ISSUE_TYPE_ID,
         record.get("issue_type"),
     )
-    add_text_custom_field(fields, JIRA_FIELD_TEAM_ID, record.get("team"))
+    add_team_custom_field(fields, JIRA_FIELD_TEAM_ID, record.get("team"))
     add_adf_custom_field(
         fields,
         JIRA_FIELD_RECOMMENDED_ACTION_ID,
         record.get("recommended_action"),
     )
+    add_option_custom_field(fields, JIRA_FIELD_SEVERITY_ID, severity_field_value(record))
+    add_option_custom_field(fields, JIRA_FIELD_URGENCY_ID, urgency_field_value(record))
     return fields
 
 
@@ -315,6 +375,8 @@ class JiraClient:
                 JIRA_FIELD_FEEDBACK_ISSUE_TYPE_ID,
                 JIRA_FIELD_TEAM_ID,
                 JIRA_FIELD_RECOMMENDED_ACTION_ID,
+                JIRA_FIELD_SEVERITY_ID,
+                JIRA_FIELD_URGENCY_ID,
             ]
             if field_id
         )
@@ -404,6 +466,12 @@ def update_record_from_issue(record: dict[str, Any], issue: dict[str, Any]) -> N
     record["recommended_action"] = read_custom_field_value(
         fields.get(JIRA_FIELD_RECOMMENDED_ACTION_ID)
     ) or record.get("recommended_action")
+    record["severity"] = read_custom_field_value(fields.get(JIRA_FIELD_SEVERITY_ID)) or record.get(
+        "severity"
+    )
+    record["urgency"] = read_custom_field_value(fields.get(JIRA_FIELD_URGENCY_ID)) or record.get(
+        "urgency"
+    )
     assignee = fields.get("assignee") or {}
     record["assignee"] = assignee.get("displayName") or assignee.get("accountId")
     record["jira_assignee"] = user_snapshot(fields.get("assignee"))
@@ -517,6 +585,20 @@ def update_ticket_db_from_issue(issue: dict[str, Any]) -> dict[str, Any]:
                 setattr(ticket, attr, value)
                 changed_fields.append(attr)
 
+        linked_issue = db.get(Issue, ticket.issue_id)
+
+        def set_issue_if_changed(attr: str, value: Any) -> None:
+            if (
+                linked_issue is not None
+                and value is not None
+                and getattr(linked_issue, attr) != value
+            ):
+                setattr(linked_issue, attr, value)
+                changed_fields.append(f"issue.{attr}")
+
+        latest_response = latest_comment_text(issue)
+        response_comments = jira_comment_snapshots(issue)
+
         set_if_changed("summary", fields.get("summary"))
         set_if_changed(
             "description",
@@ -524,8 +606,10 @@ def update_ticket_db_from_issue(issue: dict[str, Any]) -> dict[str, Any]:
         )
         set_if_changed("priority", (fields.get("priority") or {}).get("name"))
         set_if_changed("status", (fields.get("status") or {}).get("name"))
-        set_if_changed("response", latest_comment_text(issue))
-        set_if_changed("response_comments", jira_comment_snapshots(issue))
+        set_if_changed("response", latest_response)
+        set_if_changed("response_comments", response_comments)
+        set_issue_if_changed("response", latest_response)
+        set_issue_if_changed("response_comments", response_comments)
         set_if_changed("labels", fields.get("labels") or [])
         set_if_changed(
             "issue_type",

@@ -37,6 +37,8 @@ def _issue_dto(issue: Issue) -> dict[str, Any]:
         "userId": issue.user_id,
         "status": issue.status,
         "summary": issue.summary,
+        "response": issue.response,
+        "responseComments": issue.response_comments or [],
         "resolvedBy": issue.resolved_by,
         "createdAt": issue.created_at.isoformat() if issue.created_at else None,
         "updatedAt": issue.updated_at.isoformat() if issue.updated_at else None,

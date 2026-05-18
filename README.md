@@ -108,9 +108,14 @@ JIRA_PROJECT_KEY=ABC
 JIRA_DEFAULT_ISSUE_TYPE=Task
 JIRA_WEBHOOK_SECRET=choose-a-shared-secret
 JIRA_FIELD_SOURCE_CASE_ID=customfield_10000
-JIRA_FIELD_FEEDBACK_ISSUE_TYPE_ID=customfield_10001
-JIRA_FIELD_TEAM_ID=customfield_10002
+JIRA_FIELD_FEEDBACK_ISSUE_TYPE_ID=customfield_10072
+JIRA_FIELD_TEAM_ID=customfield_10001
 JIRA_FIELD_RECOMMENDED_ACTION_ID=customfield_10003
+JIRA_FIELD_SEVERITY_ID=customfield_10141
+JIRA_FIELD_URGENCY_ID=customfield_10142
+JIRA_TEAM_ID_SUPPORT=your-support-team-id
+JIRA_TEAM_ID_SOFTWARE_DEVELOPMENT=your-software-development-team-id
+JIRA_TEAM_ID_SECURITY=your-security-team-id
 ```
 
 Start the backend, then call:
@@ -122,13 +127,15 @@ curl -X POST http://127.0.0.1:8000/api/jira/sync-from-jira
 
 `sync-to-jira` creates Jira issues for dataset rows that do not yet have `jira_key` or `jira_id`, then stores the Jira identifiers in the JSON file. `sync-from-jira` refreshes linked rows from Jira.
 
-To map dataset metadata into Jira fields, create custom text fields in Jira for source case, feedback issue type, team, and recommended action. Then find their `customfield_...` IDs with:
+To map dataset metadata into Jira fields, create custom fields in Jira for source case, feedback issue type, recommended action, severity, and urgency. Severity, urgency, and feedback issue type should be single-select dropdown fields. For team routing, use Jira's built-in Atlassian Team field and configure `JIRA_FIELD_TEAM_ID` with that field ID. Then find the `customfield_...` IDs with:
 
 ```bash
 curl http://127.0.0.1:8000/api/jira/fields
 ```
 
 Put the matching IDs in `backend/.env`. If these values are blank, the sync only uses Jira's standard fields.
+
+Jira's Atlassian Team field expects a Team ID, not the team display name. To find a team's ID, open the team profile page in Jira/Atlassian and copy the final URL segment after `/team/`, then put it in the matching `JIRA_TEAM_ID_*` variable.
 
 For automatic updates, configure a Jira webhook that points to:
 

@@ -85,6 +85,8 @@ class Issue(Base):
         String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    response: Mapped[str | None] = mapped_column(Text, nullable=True)
+    response_comments: Mapped[list | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default=ISSUE_STATUS_ACTIVE
     )

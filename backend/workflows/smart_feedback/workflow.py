@@ -168,6 +168,7 @@ def _ticket_record_from_state(
     )
 
     severity = _enum_value(getattr(incident_assessment, "severity", None))
+    urgency = _enum_value(getattr(analysis_result, "urgency", None))
     priority_by_severity = {1: "Low", 2: "Medium", 3: "High"}
 
     labels = ["source_smart_feedback"]
@@ -176,7 +177,7 @@ def _ticket_record_from_state(
             [
                 f"intent_{_enum_value(analysis_result.intent)}",
                 f"sentiment_{_enum_value(analysis_result.sentiment)}",
-                f"urgency_{_enum_value(analysis_result.urgency)}",
+                f"urgency_{urgency}",
                 f"issue_{_enum_value(analysis_result.issue_type)}",
                 f"language_{_enum_value(analysis_result.language)}",
             ]
@@ -195,6 +196,8 @@ def _ticket_record_from_state(
             else "feedback"
         ),
         "priority": priority_by_severity.get(severity, "Medium"),
+        "severity": severity,
+        "urgency": urgency,
         "team": _enum_value(getattr(incident_assessment, "support_team", "support")),
         "labels": labels,
         "recommended_action": getattr(incident_assessment, "recommended_action", ""),
