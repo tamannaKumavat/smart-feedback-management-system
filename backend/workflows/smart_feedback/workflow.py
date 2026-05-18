@@ -300,9 +300,11 @@ class SmartFeedbackWorkflow:
         if not results:
             return "triage"
         # Keyword matches always count as sufficient (any match found is relevant)
-        has_keyword_match = any(r.get("matched_on") == "keyword" for r in results)
+        # This will yield like 99% of the time a result -> We will be stuck in this loop forever!!
+        #has_keyword_match = any(r.get("matched_on") == "keyword" for r in results)
         has_vector_match = max((r.get("score", 0.0) for r in results), default=0.0) >= RELEVANCE_THRESHOLD
-        return "respond" if (has_keyword_match or has_vector_match) else "triage"
+        print(f"Triage has vector match: {has_vector_match}")
+        return "respond" if has_vector_match else "triage"
 
     def rag_result_user_assessment(self, state: SmartFeedbackState):
         interrupt_data: InterruptData = {
