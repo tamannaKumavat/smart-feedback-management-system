@@ -6,6 +6,7 @@ from workflows.smart_feedback.data_models import (
     SmartFeedbackState,
     AnalysisAgentResult,
     EngagementDecision,
+    InterruptData
 )
 from workflows.smart_feedback.prompt_templates import (
     chat_template_analysis_agent,
@@ -43,17 +44,28 @@ def _format_history(prior_history: list[dict]) -> str:
 
 
 def build_workflow(
-    checkpointer: Any = None, graph_config: dict = {}
+    checkpointer: Any = None,
+    graph_config: dict = {},
+    chat_model_input: Any = None,
+    db=None,
+    issue=None,
+    user_id: str | None = None,
 ) -> "SmartFeedbackWorkflow":
     """Construct a SmartFeedbackWorkflow with the correct chat model for the current config."""
     from config import MOCK_MODE
-
-    if MOCK_MODE:
+    if chat_model_input:
+        chat_model = chat_model_input
+    elif MOCK_MODE:
         chat_model = _build_mock_chat_model()
     else:
         chat_model = _build_live_chat_model()
     return SmartFeedbackWorkflow(
-        chat_model, checkpointer=checkpointer, graph_config=graph_config
+        chat_model,
+        checkpointer=checkpointer,
+        graph_config=graph_config,
+        db=db,
+        issue=issue,
+        user_id=user_id,
     )
 
 
@@ -65,6 +77,11 @@ def _build_live_chat_model():
         WATSONX_PROJECT_ID,
         WATSONX_URL,
     )
+
+    if not WATSONX_API_KEY:
+        raise RuntimeError("WATSONX_API_KEY is not set. Add it to your .env file.")
+    if not WATSONX_PROJECT_ID:
+        raise RuntimeError("WATSONX_PROJECT_ID is not set. Add it to your .env file.")
 
     return ChatWatsonx(
         model_id=WATSONX_MODEL_ID,
@@ -98,18 +115,27 @@ def _build_mock_chat_model():
 
         def with_structured_output(self, schema, **kwargs):
             def build_default(_input):
+                init_kwargs = {}
+                for field_name, field_info in schema.model_fields.items():
+                    ann = field_info.annotation
+                    if ann is bool and field_info.default is True:
+                        # Flip True-defaulted bools to False so mock proceeds through the flow
+                        init_kwargs[field_name] = False
+                    elif field_info.is_required():
+                        if ann is str:
+                            init_kwargs[field_name] = "[MOCK]"
+                        elif ann is int:
+                            init_kwargs[field_name] = 1
+                        elif hasattr(ann, "__members__"):
+                            init_kwargs[field_name] = list(ann)[0]
+                        elif hasattr(ann, "__args__"):
+                            init_kwargs[field_name] = ann.__args__[0]
+                        else:
+                            init_kwargs[field_name] = None
                 try:
-                    return schema()
-                except Exception:
-                    init_kwargs = {}
-                    for field_name, field_info in schema.model_fields.items():
-                        if field_info.is_required():
-                            ann = field_info.annotation
-                            if hasattr(ann, "__members__"):
-                                init_kwargs[field_name] = list(ann)[0]
-                            elif hasattr(ann, "__args__"):
-                                init_kwargs[field_name] = ann.__args__[0]
                     return schema(**init_kwargs)
+                except Exception:
+                    return schema()
 
             return RunnableLambda(build_default)
 
@@ -118,7 +144,6 @@ def _build_mock_chat_model():
             return "mock"
 
     return _MockChatModel()
-
 
 
 class SmartFeedbackWorkflow:
@@ -136,14 +161,22 @@ class SmartFeedbackWorkflow:
     """
 
     def __init__(
-        self, chat_model: Any, checkpointer: Any = None, graph_config: dict = {}
+        self,
+        chat_model: Any,
+        checkpointer: Any = None,
+        graph_config: dict = {},
+        db=None,
+        issue=None,
+        user_id: str | None = None,
     ):
         self.chat_model = chat_model
         self._rag_agent = RAGAgent()
         self._workflow: StateGraph = None
         self.checkpointer = checkpointer
-        self.chat_model = chat_model
         self.graph_config = graph_config
+        self.db = db
+        self.issue = issue
+        self.user_id = user_id
         self._judge_current_iteration = 0
         self.judge_max_iterations = 1
         self._generate_workflow()
@@ -162,6 +195,7 @@ class SmartFeedbackWorkflow:
         workflow.add_node("rag_search_workflow", self.rag_search_workflow)
         workflow.add_node("rag_result_user_assessment", self.rag_result_user_assessment)
         workflow.add_node("add_ticket_to_jira", self.add_ticket_to_jira)
+        workflow.add_node("generate_chat_summary", self.generate_chat_summary)
 
         # Add edges
         workflow.add_edge(START, "engagement_with_user")
@@ -197,10 +231,10 @@ class SmartFeedbackWorkflow:
 
         workflow.add_conditional_edges(
             "rag_result_user_assessment",
-            self._route_rag_user_assessment,  # New method to check RAG sufficiency
+            self._route_rag_user_assessment,
             {
-                "yes": "end_node",  # RAG answer sufficient -> User can end now
-                "no": "engagement_with_user",  # RAG result insufficient -> clarify
+                "yes": "generate_chat_summary",  # RAG answer sufficient -> summarise then end
+                "no": "engagement_with_user",    # RAG result insufficient -> clarify
             },
         )
         workflow.add_node("analysis_rag_results", self.analysis_rag_results)
@@ -239,10 +273,11 @@ class SmartFeedbackWorkflow:
                 HumanAssessment.REDO_TICKET: "triage_request",
             },
         )
-        workflow.add_edge("add_additional_information_to_ticket", "update_ticket")
+        workflow.add_edge("add_additional_information_to_ticket", "human_ticket_assessment")
         workflow.add_edge("update_ticket", "generate_ticket_created_response")
         workflow.add_edge("generate_ticket_created_response", "add_ticket_to_jira")
-        workflow.add_edge("add_ticket_to_jira", "end_node")
+        workflow.add_edge("add_ticket_to_jira", "generate_chat_summary")
+        workflow.add_edge("generate_chat_summary", "end_node")
         workflow.add_edge("end_node", END)
 
         self._workflow = workflow.compile(checkpointer=self.checkpointer)
@@ -258,50 +293,35 @@ class SmartFeedbackWorkflow:
         if state.get("rag_results", []) and state.get("engagement_response", ""):
             return "rag_user_assessment"
 
-        return "proceed"  # Proceed to create_ticket (fan-out)
+        return "proceed"
 
     def _route_rag_results(self, state: SmartFeedbackState) -> str:
-        # Check RAG sufficiency
         results = state.get("rag_results", [])
-        rag_sufficient = (
-            bool(results)
-            and max((r.get("score", 0.0) for r in results), default=0.0)
-            >= RELEVANCE_THRESHOLD
-        )
-        return "respond" if rag_sufficient else "triage"
-
-    def _route_engagement_phase2(self, state: SmartFeedbackState) -> str:
-        # Phase 2: Check if RAG was sufficient (already handled in _route_rag_results)
-        # This is a fallback for engagement_with_user in Phase 2
-        results = state.get("rag_results", [])
-        rag_sufficient = (
-            bool(results)
-            and max((r.get("score", 0.0) for r in results), default=0.0)
-            >= RELEVANCE_THRESHOLD
-        )
-        return "respond" if rag_sufficient else "triage"
+        if not results:
+            return "triage"
+        # Keyword matches always count as sufficient (any match found is relevant)
+        # This will yield like 99% of the time a result -> We will be stuck in this loop forever!!
+        #has_keyword_match = any(r.get("matched_on") == "keyword" for r in results)
+        has_vector_match = max((r.get("score", 0.0) for r in results), default=0.0) >= RELEVANCE_THRESHOLD
+        print(f"Triage has vector match: {has_vector_match}")
+        return "respond" if has_vector_match else "triage"
 
     def rag_result_user_assessment(self, state: SmartFeedbackState):
-        rag_answer = state.get("engagement_response", "")
-        prompt = (
-            f"{rag_answer}\n\nDoes this answer your question? (yes / no)"
-            if rag_answer
-            else "Please state if this answers your question. Either yes or no."
+        interrupt_data: InterruptData = {
+            "content": "Please state if this answers you question. Either yes or no",
+            "options": ["yes", "no"]
+        }
+        response = interrupt(
+            interrupt_data
         )
-        response = interrupt(prompt)
-
         updated_state = {}
         if response.lower() not in ["yes", "no"]:
             response = "no"
-        if response.lower() == "yes":
-            updated_state["final_user_response"] = (
-                "I'm glad that answered your question! "
-                "Feel free to start a new chat if you need anything else."
-            )
-        else:
+        if response.lower() == "no":
             updated_state["rag_results"] = []
             updated_state["analysis_agent_result"] = None
         updated_state["rag_user_assessment"] = response.lower()
+
         return updated_state
 
     def _route_rag_user_assessment(self, state: SmartFeedbackState):
@@ -330,16 +350,18 @@ class SmartFeedbackWorkflow:
             }
 
         if state.get("is_first_message", True):
-            # First message is pre-populated by the WS handler before workflow starts.
-            # No interrupt needed — the greeting is shown statically on the frontend.
-            answer = state["user_query"]
+            answer = interrupt("How can I help you today?")
+            state["user_query"] = answer
             chain = (
                 chat_template_engagement_entry
                 | self.chat_model.with_structured_output(EngagementDecision)
             )
-            decision: EngagementDecision = chain.invoke({"user_query": answer})
+            decision: EngagementDecision = chain.invoke(
+                {"user_query": state["user_query"]}
+            )
         else:
-            answer = interrupt("Please clarify your request.")
+            prev_question = state.get("engagement_response") or "Please clarify your request."
+            answer = interrupt(prev_question)
             state["user_query"] = answer
             chain = (
                 chat_template_engagement_followup
@@ -347,7 +369,7 @@ class SmartFeedbackWorkflow:
             )
             decision: EngagementDecision = chain.invoke(
                 {
-                    "user_query": answer,
+                    "user_query": state["user_query"],
                     "conversation_history": state["chat_history"],
                 }
             )
@@ -357,7 +379,7 @@ class SmartFeedbackWorkflow:
             "needs_clarification": decision.needs_clarification,
             "engagement_response": decision.response,
             "chat_history": [
-                HumanMessage(content=answer),
+                HumanMessage(content=state["user_query"]),
                 AIMessage(content=decision.response),
             ],
             "is_first_message": False,
@@ -390,17 +412,26 @@ class SmartFeedbackWorkflow:
     ### Triage
     ###
     def human_ticket_assessment(self, state: SmartFeedbackState) -> SmartFeedbackState:
-        assessment = interrupt(
-            f"Please review the ticket answer one of the following options: {', '.join([i.value for i in HumanAssessment])}"
-        )
-        if assessment in [i.value for i in HumanAssessment]:
-            return {"human_assessment": assessment}
-        return {"human_assessment": HumanAssessment.OK}
+        interrupt_data: InterruptData = {
+            "content": "Does this ticket look correct?",
+            "options": ["ok", "redo", "additional"],
+        }
+        assessment = interrupt(interrupt_data)
+        val = assessment.strip().lower() if isinstance(assessment, str) else ""
+        if val == "ok":
+            return {"human_assessment": HumanAssessment.OK}
+        if val == "redo":
+            return {"human_assessment": HumanAssessment.REDO_TICKET}
+        return {"human_assessment": HumanAssessment.ADD_ADDITIONAL_CONTENT}
 
     def add_additional_information_to_ticket(self, state: SmartFeedbackState) -> str:
-        user_comment = interrupt("Please add you comment to the ticket")
+        interrupt_data: InterruptData = {
+            "content": "What would you like to change or add?",
+            "options": [],
+        }
+        user_comment = interrupt(interrupt_data)
         final_ticket_content = (
-            state.get("ticket_summary") + f"\nUSER COMMENT:\n{user_comment}"
+            state.get("ticket_summary") + f"\n\n**User Comment:**\n{user_comment}"
         )
         return {
             "ticket_summary": final_ticket_content,
@@ -449,9 +480,6 @@ class SmartFeedbackWorkflow:
         return {"incident_assessment": [incident_assessment]}
 
     def judge_triage_request(self, state: SmartFeedbackState) -> SmartFeedbackState:
-        print(
-            f"[judge_triage_request] Invoked. Iteration: {self._judge_current_iteration + 1}"
-        )
         triage_judge_chain = (
             chat_template_triage_judge
             | self.chat_model.with_structured_output(IncidentAssessmentJudge)
@@ -464,9 +492,6 @@ class SmartFeedbackWorkflow:
             }
         )
         self._judge_current_iteration += 1
-        print(
-            f"[judge_triage_request] Judge decision: {judged_incident_assessment.overall_assessment}"
-        )
         return {"incident_assessment_judge": [judged_incident_assessment]}
 
     def route_judge(self, state: SmartFeedbackState) -> str:
@@ -494,12 +519,67 @@ class SmartFeedbackWorkflow:
             "chat_history": [ticket_content],
         }
 
-    def update_ticket(self, state: SmartFeedbackState) -> SmartFeedbackState:
-        """TODO: How do we handle created tickets? Do we save them in the database so we can use them in the future
-        as responses?
-        """
-        print("TODO: Adding ticket to database - for future use")
-        return state
+    @staticmethod
+    def _parse_ticket_sections(ticket_summary: str) -> dict:
+        import re
+
+        def extract(pattern):
+            m = re.search(pattern, ticket_summary, re.DOTALL | re.IGNORECASE)
+            return m.group(1).strip() if m else None
+
+        title        = extract(r"\*\*Title\*\*[:\s]+(.*?)(?=\n+\*\*|\Z)")
+        description  = extract(r"\*\*Description\*\*[:\s]+(.*?)(?=\n+\*\*Severity|\n+\*\*Next Steps|\n+\*\*User Comment|\Z)")
+        next_steps   = extract(r"\*\*Next Steps\*\*[:\s]+(.*?)(?=\n+\*\*User Comment|\Z)")
+        user_comment = extract(r"\*\*User Comment\*\*[:\s]+(.*?)(?:\Z)")
+
+        desc_parts = [p for p in [description, f"**User Comment:**\n{user_comment}" if user_comment else None] if p]
+
+        return {
+            "title":             title,
+            "description":       "\n\n".join(desc_parts) if desc_parts else None,
+            "recommended_action": next_steps,
+        }
+
+    def update_ticket(self, state: SmartFeedbackState) -> dict:
+        from services import chat_service
+
+        _SEVERITY_MAP = {1: "Low", 2: "Medium", 3: "High"}
+        assessments = state.get("incident_assessment") or []
+        assessment = assessments[-1] if assessments else None
+
+        analysis_result = state.get("analysis_agent_result")
+        issue_type = analysis_result.issue_type.value if analysis_result else None
+        ticket_summary = state.get("ticket_summary") or ""
+        sections = self._parse_ticket_sections(ticket_summary)
+
+        if assessment is not None:
+            priority = _SEVERITY_MAP.get(assessment.severity, str(assessment.severity))
+            ticket_fields = {
+                "summary": sections["title"] or assessment.user_issue,
+                "description": sections["description"],
+                "issue_type": issue_type,
+                "priority": priority,
+                "team": assessment.support_team.value,
+                "recommended_action": sections["recommended_action"] or assessment.recommended_action,
+            }
+        else:
+            ticket_fields = {
+                "summary": sections["title"] or ticket_summary,
+                "description": sections["description"],
+                "issue_type": issue_type,
+                "recommended_action": sections["recommended_action"],
+            }
+
+        if self.db is not None and self.issue is not None and self.user_id is not None:
+            ticket = chat_service.create_ticket_from_triage(
+                db=self.db,
+                issue=self.issue,
+                user_id=self.user_id,
+                **ticket_fields,
+            )
+            return {"ticket_id": ticket.case_id}
+
+        return {}
 
     def generate_ticket_created_response(self, state: SmartFeedbackState):
         return {
@@ -510,8 +590,21 @@ class SmartFeedbackWorkflow:
         # TODO: add logic to add ticket to jira board
         pass
 
+    def generate_chat_summary(self, state: SmartFeedbackState) -> dict:
+        history_lines = []
+        for m in state.get("chat_history", []):
+            role = "User" if isinstance(m, HumanMessage) else "Agent"
+            history_lines.append(f"{role}: {m.content}")
+        history = "\n".join(history_lines) or "(no conversation history)"
+        prompt = (
+            f"Summarise the following support conversation in 2 concise sentences, "
+            f"focusing on the user's issue and how it was resolved:\n\n{history}"
+        )
+        response = self.chat_model.invoke(prompt)
+        return {"final_user_response": response.content}
+
     def end_node(self, state: SmartFeedbackState):
-        return state
+        return {"final_user_response": state.get("final_user_response", "")}
 
     # Public entry point
     def run(self, user_query: str, is_first_message: bool = True, stream: bool = False):

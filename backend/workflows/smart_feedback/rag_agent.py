@@ -15,7 +15,11 @@ logger = logging.getLogger(__name__)
 
 # Minimum cosine similarity to consider a question "already answered".
 # Below this threshold the triage agent takes over.
-RELEVANCE_THRESHOLD = 0.5
+RELEVANCE_THRESHOLD = 0.9
+
+# Set to False to skip IBM WatsonX embeddings and use keyword search instead.
+# Flip back to True when you want real vector search.
+_USE_IBM_EMBEDDINGS = True
 
 
 class RAGAgent:
@@ -37,7 +41,7 @@ class RAGAgent:
 
     def __init__(self):
         self._embeddings_model = None
-        if not MOCK_MODE:
+        if not MOCK_MODE and _USE_IBM_EMBEDDINGS:
             self._init_embeddings()
 
     def _init_embeddings(self) -> None:
@@ -61,7 +65,12 @@ class RAGAgent:
         """
         if MOCK_MODE or self._embeddings_model is None:
             return self._keyword_search(query, top_k)
-        return self._vector_search(query, top_k)
+        # Vector search on rag_chunks + keyword search on tickets (no ticket embeddings)
+        vector_results = self._vector_search(query, top_k)
+        ticket_results = self._ticket_keyword_search(query, top_k)
+        combined = vector_results + ticket_results
+        combined.sort(key=lambda r: r["score"], reverse=True)
+        return combined[:top_k]
 
     # Vector search (live mode)
     def _vector_search(self, query: str, top_k: int) -> list[dict]:
@@ -72,7 +81,7 @@ class RAGAgent:
             # Search both question and answer embeddings; take the best score.
             # question_embedding match → user phrased query like a past question
             # answer_embedding match   → user used terminology from the answer
-            sql = text("""
+            sql_chunks = text("""
                 SELECT
                     question_text,
                     answer_text,
@@ -103,17 +112,50 @@ class RAGAgent:
                 LIMIT :top_k
             """)
 
+            # sql_tickets = text("""
+            #     SELECT
+            #         summary              AS question_text,
+            #         recommended_action   AS answer_text,
+            #         'ticket'             AS source_type,
+            #         NULL                 AS doc_id,
+            #         NULL                 AS doc_version,
+            #         NULL                 AS chunk_id,
+            #         case_id,
+            #         NULL                 AS language,
+            #         team                 AS department,
+            #         priority             AS severity,
+            #         issue_type           AS intent,
+            #         1 - (summary_embedding <=> CAST(:vec AS vector)) AS score,
+            #         'summary'            AS matched_on
+            #     FROM tickets
+            #     WHERE status = 'Resolved'
+            #       AND summary_embedding IS NOT NULL
+            #       AND recommended_action IS NOT NULL
+            #       AND 1 - (summary_embedding <=> CAST(:vec AS vector)) >= :threshold
+            #     ORDER BY score DESC
+            #     LIMIT :top_k
+            # """)
+
             db = SessionLocal()
             try:
-                rows = db.execute(sql, {
+                chunk_rows = db.execute(sql_chunks, {
                     "vec": vec_str,
                     "threshold": RELEVANCE_THRESHOLD,
                     "top_k": top_k,
                 }).fetchall()
+                # Uncomment below and save summary_embedding in update_ticket to enable ticket vector search
+                # ticket_rows = db.execute(sql_tickets, {
+                #     "vec": vec_str,
+                #     "threshold": RELEVANCE_THRESHOLD,
+                #     "top_k": top_k,
+                # }).fetchall()
             finally:
                 db.close()
 
-            return [self._row_to_dict(row) for row in rows]
+            # results = [self._row_to_dict(r) for r in chunk_rows + ticket_rows]
+            # results.sort(key=lambda r: r["score"], reverse=True)
+            # return results[:top_k]
+            return [self._row_to_dict(r) for r in chunk_rows]
 
         except Exception as exc:
             logger.error("RAGAgent._vector_search failed: %s — falling back to keyword.", exc)
@@ -125,7 +167,6 @@ class RAGAgent:
         if not words:
             return []
 
-        # Search both question and answer text fields
         like_clauses = " OR ".join(
             f"question_text ILIKE :w{i} OR answer_text ILIKE :w{i}"
             for i in range(len(words))
@@ -134,7 +175,7 @@ class RAGAgent:
         for i, w in enumerate(words):
             params[f"w{i}"] = f"%{w}%"
 
-        sql = text(f"""
+        sql_chunks = text(f"""
             SELECT
                 question_text,
                 answer_text,
@@ -156,11 +197,57 @@ class RAGAgent:
 
         db = SessionLocal()
         try:
-            rows = db.execute(sql, params).fetchall()
+            chunk_rows = db.execute(sql_chunks, params).fetchall()
         finally:
             db.close()
 
-        return [self._row_to_dict(row) for row in rows]
+        results = [self._row_to_dict(r) for r in chunk_rows]
+        results += self._ticket_keyword_search(query, top_k)
+        results.sort(key=lambda r: r["score"], reverse=True)
+        return results[:top_k]
+
+    def _ticket_keyword_search(self, query: str, top_k: int) -> list[dict]:
+        words = [w.strip() for w in query.split() if len(w.strip()) > 2]
+        if not words:
+            return []
+
+        ticket_like_clauses = " OR ".join(
+            f"summary ILIKE :w{i} OR description ILIKE :w{i}"
+            for i in range(len(words))
+        )
+        params: dict = {"top_k": top_k}
+        for i, w in enumerate(words):
+            params[f"w{i}"] = f"%{w}%"
+
+        sql_tickets = text(f"""
+            SELECT
+                summary            AS question_text,
+                recommended_action AS answer_text,
+                'ticket'           AS source_type,
+                NULL               AS doc_id,
+                NULL               AS doc_version,
+                NULL               AS chunk_id,
+                case_id,
+                NULL               AS language,
+                team               AS department,
+                priority           AS severity,
+                issue_type         AS intent,
+                0.6                AS score,
+                'keyword'          AS matched_on
+            FROM tickets
+            WHERE recommended_action IS NOT NULL
+              AND status = 'Resolved'
+              AND ({ticket_like_clauses})
+            LIMIT :top_k
+        """)
+
+        db = SessionLocal()
+        try:
+            rows = db.execute(sql_tickets, params).fetchall()
+        finally:
+            db.close()
+
+        return [self._row_to_dict(r) for r in rows]
 
     @staticmethod
     def _row_to_dict(row) -> dict:
