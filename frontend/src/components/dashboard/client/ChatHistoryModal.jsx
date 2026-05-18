@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { FiX } from "react-icons/fi";
+import MarkdownMessage from "../../MarkdownMessage.jsx";
 import { getMessages } from "../../../lib/chatApi.js";
 import { showError } from "../../../lib/toast.js";
 
@@ -77,11 +78,13 @@ function HistoryMessage({ msg }) {
             label={isUser ? "You" : "Ruag Team"}
           />
           <div
-            className={`min-w-0 max-w-full whitespace-pre-wrap ${
-              isUser ? bubbleUser : bubbleTeam
-            }`}
+            className={`min-w-0 max-w-full ${isUser ? bubbleUser : bubbleTeam}`}
           >
-            {msg.content}
+            {isUser ? (
+              <p className="whitespace-pre-wrap">{msg.content}</p>
+            ) : (
+              <MarkdownMessage>{msg.content}</MarkdownMessage>
+            )}
           </div>
         </div>
       </article>

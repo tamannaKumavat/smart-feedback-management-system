@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { FaRegShareFromSquare } from "react-icons/fa6";
 import { FiPaperclip, FiPlus, FiSend, FiSmile, FiX } from "react-icons/fi";
+import MarkdownMessage from "../../components/MarkdownMessage.jsx";
 import PortalLayout from "../../layouts/PortalLayout.jsx";
 import {
   attachmentDownloadUrl,
@@ -489,8 +490,12 @@ const handleSubmit = async (event) => {
         </p>
         <div className={`flex items-end gap-2 ${isUser ? "justify-end" : "justify-start"}`}>
           {!isUser ? <Avatar src={teamAvatar} label="Team" /> : null}
-          <div className={`max-w-[560px] ${isUser ? bubbleUser : bubbleTeam} whitespace-pre-wrap`}>
-            <p>{msg.content}</p>
+          <div className={`max-w-[560px] ${isUser ? bubbleUser : bubbleTeam}`}>
+            {isUser ? (
+              <p className="whitespace-pre-wrap">{msg.content}</p>
+            ) : (
+              <MarkdownMessage>{msg.content}</MarkdownMessage>
+            )}
             {msg.attachments?.length ? (
               <div className="mt-2 flex flex-col gap-1.5">
                 {msg.attachments.map((att) => (
