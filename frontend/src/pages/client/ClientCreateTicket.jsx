@@ -169,7 +169,7 @@ export default function ClientCreateTicket() {
   const [uploading, setUploading] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [aiWaitingForInput, setAiWaitingForInput] = useState(true);
-  
+  const [pendingOptions, setPendingOptions] = useState(null);
   // Refs
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -177,49 +177,7 @@ export default function ClientCreateTicket() {
   const chatRef = useRef(null);
 
 
- async function handleOptionChoice(option) {
-    if (!option || sending || !pendingOptions) return;
-    if (chatClosed) {
-      showError("This chat is closed. Start a new one.");
-      return;
-    }
 
-    setPendingOptions(null);
-    setSending(true);
-
-    let activeChat = chat;
-    try {
-      activeChat = activeChat ?? (await ensureChat());
-    } catch (err) {
-      setSending(false);
-      showError(err, "Could not start chat");
-      return;
-    }
-
-    setMessages((prev) => [
-      ...prev,
-      createLocalMessage({
-        sender: "user",
-        content: option,
-        chatId: activeChat.id,
-      }),
-    ]);
-    streamingContentRef.current = "";
-    setStreamingDraft({ id: "streaming", content: "" });
-
-    const wsPayload = JSON.stringify({
-      type: "option_response",
-      content: option,
-    });
-
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(wsPayload);
-    } else {
-      showError("Connection lost. Please try again.");
-      setSending(false);
-      setStreamingDraft(null);
-    }
-  }
 
 useEffect(() => {
   let cancelled = false;
@@ -295,19 +253,18 @@ useEffect(() => {
         console.log("[WS] Connected");
         setWsConnected(true);
         setAiWaitingForInput(false);
+        setPendingOptions(null);
         showSuccess("Connected to server");
         
       }; 
-
       ws.onmessage = (e) => {
-        console.log("[WS] Message received:", e.data);
         try {
           const data = JSON.parse(e.data);
-          console.log(chatRef.current)
           if (data.type === "options") {
             setAiWaitingForInput(true);
+            setPendingOptions(data.options);
             if (data.content) {
-              const optionsHint = data.options && data.options.length > 0
+              const optionsHint = data.options?.length > 0
                 ? ` (${data.options.join(" / ")})`
                 : "";
               setMessages((prev) => [...prev, {
@@ -318,9 +275,9 @@ useEffect(() => {
                 createdAt: new Date().toISOString(),
               }]);
             }
-          }
-          else if (data.type === "message" && data.content) {
+          } else if (data.type === "message") {
             setAiWaitingForInput(false);
+            setPendingOptions(null);
             setMessages((prev) => [...prev, {
               id: `ai-${Date.now()}`,
               sender: "ai",
@@ -329,7 +286,6 @@ useEffect(() => {
               createdAt: new Date().toISOString(),
             }]);
           }
-          // ignore unknown/internal workflow messages
         } catch (err) {
           setMessages((prev) => [...prev, {
             id: `ai-${Date.now()}`,
@@ -339,7 +295,7 @@ useEffect(() => {
             createdAt: new Date().toISOString(),
           }]);
         }
-      }; 
+      };
 
       ws.onerror = (error) => {
         console.error("[WS] Error:", error);
@@ -363,6 +319,35 @@ useEffect(() => {
     };
   }, [chat]);
 
+async function handleOptionChoice(option) {
+  if (!option || sending || !pendingOptions) return;
+  setPendingOptions(null);
+  setSending(true);
+
+  setMessages((prev) => [
+    ...prev,
+    {
+      id: `user-${Date.now()}`,
+      sender: "user",
+      content: option,
+      aiAnswerType: "normal",
+      createdAt: new Date().toISOString(),
+    },
+  ]);
+
+  const wsPayload = JSON.stringify({
+    type: "option_response",
+    content: option,
+  });
+
+  if (wsRef.current?.readyState === WebSocket.OPEN) {
+    wsRef.current.send(wsPayload);
+    setSending(false); // <-- Critical: Re-enable input after sending
+  } else {
+    showError("Connection lost. Please try again.");
+    setSending(false);
+  }
+}
   // Auto-scroll to bottom when messages update
   useEffect(() => {
     const el = scrollRef.current;
@@ -439,6 +424,8 @@ const handleSubmit = async (event) => {
   setSending(false);
 };
 
+
+
   // Start a new chat
   const handleNewChat = async () => {
     if (wsRef.current) {
@@ -450,7 +437,8 @@ const handleSubmit = async (event) => {
     setMessageInput("");
     setPendingFile(null);
     setWsConnected(false);
-    setAiWaitingForInput(false);
+    setAiWaitingForInput(true);
+    setPendingOptions(null);
     setSearchParams({});
 
     try {
@@ -484,11 +472,11 @@ const handleSubmit = async (event) => {
         className={isUser ? "ml-auto w-full max-w-[min(100%,560px)]" : "w-full max-w-[min(100%,560px)]"}
       >
         <p className={`mb-2 text-[14px] font-semibold leading-none text-[#101827] ${isUser ? "text-right pr-11" : "pl-12"}`}>
-          {isUser ? "You" : "Team"}
+          {isUser ? "You" : "Ruag Team"}
           {time ? `, ${time}` : ""}
         </p>
         <div className={`flex items-end gap-2 ${isUser ? "justify-end" : "justify-start"}`}>
-          {!isUser ? <Avatar src={teamAvatar} label="Team" /> : null}
+          {!isUser ? <Avatar src={teamAvatar} label="Ruag Team" /> : null}
           <div className={`max-w-[560px] ${isUser ? bubbleUser : bubbleTeam} whitespace-pre-wrap`}>
             <p>{msg.content}</p>
             {msg.attachments?.length ? (
@@ -505,9 +493,7 @@ const handleSubmit = async (event) => {
     );
   };
 
-
-  const inputDisabled = !wsConnected || !aiWaitingForInput || sending;
-
+const inputDisabled = !wsConnected || !aiWaitingForInput || sending || (pendingOptions?.length > 0);
   return (
     <PortalLayout mode="client">
       <section className="mx-auto flex h-[calc(100dvh-6rem)] max-h-[calc(100dvh-6rem)] min-h-0 w-full max-w-[920px] flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
@@ -539,27 +525,24 @@ const handleSubmit = async (event) => {
         <div ref={scrollRef} className={`client-chat-messages ${scrollPretty}`}>
           <div className="client-chat-thread">
             {displayMessages.map(renderMessage)}
-            {messages.length === 0 ? (
-              <motion.div
-                className="mt-1 grid gap-2 sm:grid-cols-2"
-                {...fadeInUp}
-              >
-                {SUGGESTED_PROMPTS.map((prompt) => (
-                  <button
-                    key={prompt}
-                    type="button"
-                    className="client-chat-prompt-btn"
-                    onClick={() => handleSuggestedPrompt(prompt)}
-                    disabled={inputDisabled}
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </motion.div>
-            ) : null}
+                        {pendingOptions && (
+      <motion.div className="flex flex-wrap gap-2 p-4" {...fadeInUp}>
+        {pendingOptions.map((option) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => handleOptionChoice(option)}
+            disabled={sending}
+            className={btnYes}
+          >
+            {option}
+          </button>
+        ))}
+      </motion.div>    )}
             {/**/} 
           </div>
         </div>
+        
 
         <form
           onSubmit={handleSubmit}
