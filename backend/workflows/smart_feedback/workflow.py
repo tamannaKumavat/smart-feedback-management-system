@@ -473,32 +473,19 @@ class SmartFeedbackWorkflow:
 
     def _route_rag_results(self, state: SmartFeedbackState) -> str:
         results = state.get("rag_results", [])
+        max_score = max((r.get("score", 0.0) for r in results), default=0.0)
         rag_sufficient = (
             bool(results)
-            and max((r.get("score", 0.0) for r in results), default=0.0)
-            >= RELEVANCE_THRESHOLD
+            and max_score >= RELEVANCE_THRESHOLD
         )
         route = "respond" if rag_sufficient else "triage"
         _debug(
             "[workflow] route=rag_results rag_count=%s max_score=%s threshold=%s -> %s",
             len(results),
-            max((r.get("score", 0.0) for r in results), default=0.0),
+            max_score,
             RELEVANCE_THRESHOLD,
             route,
         )
-        return route
-
-    def _route_engagement_phase2(self, state: SmartFeedbackState) -> str:
-        # Phase 2: Check if RAG was sufficient (already handled in _route_rag_results)
-        # This is a fallback for engagement_with_user in Phase 2
-        results = state.get("rag_results", [])
-        rag_sufficient = (
-            bool(results)
-            and max((r.get("score", 0.0) for r in results), default=0.0)
-            >= RELEVANCE_THRESHOLD
-        )
-        route = "respond" if rag_sufficient else "triage"
-        _debug("[workflow] route=engagement_phase2 -> %s", route)
         return route
 
     def rag_result_user_assessment(self, state: SmartFeedbackState):

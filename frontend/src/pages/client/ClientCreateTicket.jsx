@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaRegShareFromSquare } from "react-icons/fa6";
 import { FiPaperclip, FiPlus, FiSend, FiSmile, FiX } from "react-icons/fi";
 import MarkdownMessage from "../../components/MarkdownMessage.jsx";
@@ -15,28 +15,11 @@ import {
   uploadAttachment,
 } from "../../lib/chatApi.js";
 import { getToken } from "../../lib/session.js";
+import { fadeInUp, messageBubble, scaleIn } from "../../lib/motion.js";
 import { showError, showSuccess } from "../../lib/toast.js";
-import { fadeInUp } from "../../lib/motion.js";
 
 const MAX_UPLOAD_MB = 10;
 const ALLOWED_PREFIXES = ["image/", "application/pdf", "text/"];
-
-/*
-TODO: Not all the changes coudlnt be integrated
-- Chat selection buttons
-- Updated UI
-Here is the file commit with the expected new chat features:
-https://github.com/tamannaKumavat/smart-feedback-management-system/blob/5053a038a7a1eb8bf6c4586e100f985dd2ea7300/frontend/src/pages/client/ClientCreateTicket.jsx
-
-*/
-
-
-const SUGGESTED_PROMPTS = [
-  "I can't log in to my account",
-  "I need help drafting a support ticket",
-  "Something is broken in production",
-  "Can you summarize my issue for me?",
-];
 
 function isAllowedMime(mime) {
   if (!mime) return false;
@@ -52,14 +35,18 @@ function formatBytes(n) {
 
 const userAvatar = "/user.png";
 const teamAvatar = "/ruag-single.png";
+
+const SUGGESTED_PROMPTS = [
+  "I can't log in to my account",
+  "I need help drafting a support ticket",
+  "Something is broken in production",
+  "Can you summarize my issue for me?",
+];
+
 const btnYes = "client-btn-option";
 const btnNo = "client-btn-option-muted";
-
-const bubbleUser = "rounded-[18px] bg-[#E7F3FF] px-4 py-2.5 text-[13px] leading-relaxed text-[#1e293b] shadow-sm ring-1 ring-sky-200/40";
-const bubbleTeam = "rounded-[18px] bg-white px-4 py-2.5 text-[13px] leading-relaxed text-[#1e293b] shadow-sm ring-1 ring-slate-200/90";
 const scrollPretty =
   "[scrollbar-width:thin] [scrollbar-color:rgb(100_116_139/0.45)_transparent] [&::-webkit-scrollbar]:w-[6px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border-input/60 hover:[&::-webkit-scrollbar-thumb]:bg-content-muted/50";
-
 
 function formatTime(iso) {
   if (!iso) return "";
@@ -73,6 +60,27 @@ function formatTime(iso) {
   }
 }
 
+function formatOptionLabel(option) {
+  if (!option) return "";
+  if (option === "Ok") return "Ok";
+  return option
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function createLocalMessage({ sender, content, chatId, extra = {} }) {
+  return {
+    id: `${sender}-${Date.now()}`,
+    chatId,
+    sender,
+    content,
+    aiAnswerType: "normal",
+    createdAt: new Date().toISOString(),
+    attachments: [],
+    ...extra,
+  };
+}
+
 function AttachmentChip({ attachment }) {
   const href = attachmentDownloadUrl(attachment.id);
   const isImage = attachment.mimeType?.startsWith("image/");
@@ -82,7 +90,7 @@ function AttachmentChip({ attachment }) {
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className="block max-w-[260px] overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
+        className="block max-w-[260px] overflow-hidden rounded-lg border border-border-subtle bg-surface-muted"
       >
         <img
           src={href}
@@ -90,7 +98,7 @@ function AttachmentChip({ attachment }) {
           className="block max-h-48 w-full object-cover"
           loading="lazy"
         />
-        <div className="flex items-center justify-between gap-2 px-2 py-1 text-[11px] text-slate-500">
+        <div className="flex items-center justify-between gap-2 px-2 py-1 text-[11px] text-content-muted">
           <span className="truncate">{attachment.filename}</span>
           <span className="shrink-0">{formatBytes(attachment.sizeBytes)}</span>
         </div>
@@ -102,11 +110,11 @@ function AttachmentChip({ attachment }) {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-100"
+      className="inline-flex max-w-full items-center gap-2 rounded-lg border border-border-subtle bg-surface-muted px-3 py-1.5 text-[12px] text-content hover:bg-surface-page"
     >
       <FiPaperclip className="h-3.5 w-3.5 shrink-0" aria-hidden />
       <span className="truncate font-medium">{attachment.filename}</span>
-      <span className="shrink-0 text-slate-400">
+      <span className="shrink-0 text-content-muted">
         {formatBytes(attachment.sizeBytes)}
       </span>
     </a>
@@ -115,16 +123,20 @@ function AttachmentChip({ attachment }) {
 
 function Avatar({ src, label }) {
   return (
-    <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-[#d8dce4] bg-white">
+    <div className="client-chat-avatar">
       {src ? (
         <img src={src} alt={label} className="h-full w-full object-cover" />
       ) : (
-        <div className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-[#6b7280]">
+        <div className="flex h-full w-full items-center justify-center text-[12px] font-semibold text-content-muted">
           {label?.[0] ?? "?"}
         </div>
       )}
     </div>
   );
+}
+
+function formatChatStatus(status) {
+  return String(status || "active").replace(/_/g, " ");
 }
 
 function TypingIndicator() {
@@ -154,31 +166,361 @@ function TypingIndicator() {
   );
 }
 
+const GREETING_MSG = { id: "ai-greeting", sender: "ai", content: "How can I help you with today?", aiAnswerType: "normal", createdAt: new Date().toISOString() };
 
 export default function ClientCreateTicket() {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const chatId = searchParams.get("chatId");
-  const token = getToken();
+  const navigate = useNavigate();
+  const resumeId = searchParams.get("chatId");
 
-  // State
   const [chat, setChat] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [streamingDraft, setStreamingDraft] = useState(null);
   const [messageInput, setMessageInput] = useState("");
-  const [pendingFile, setPendingFile] = useState(null);
-  const [sending, setSending] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [wsConnected, setWsConnected] = useState(false);
-  const [aiWaitingForInput, setAiWaitingForInput] = useState(true);
-  
-  // Refs
-  const scrollRef = useRef(null);
+  const [attachedFile, setAttachedFile] = useState(null);
+  const [confirmationDone, setConfirmationDone] = useState(false);
+  const [pendingOptions, setPendingOptions] = useState(null);
+  const [isFirstMessage, setIsFirstMessage] = useState(true);
   const fileInputRef = useRef(null);
-  const wsRef = useRef(null);
+  const messageInputRef = useRef(null);
+  const [sending, setSending] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [pendingFile, setPendingFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  const scrollRef = useRef(null);
   const chatRef = useRef(null);
+  const wsRef = useRef(null);
+  const pendingFirstMessage = useRef(null);
+  const streamingContentRef = useRef("");
+  const closingRef = useRef(false);
 
+  // Keep a ref so the unmount cleanup sees the latest chat without
+  // re-running the effect on every chat change.
+  useEffect(() => {
+    chatRef.current = chat;
+  }, [chat]);
 
- async function handleOptionChoice(option) {
+  // Resume an existing draft if one was passed via the URL; otherwise
+  // start a fresh blank chat (lazily — actual creation happens on first
+  // send so a user that bounces leaves no empty rows behind).
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (!resumeId) {
+        setChat(null);
+        setMessages([]);
+        setStreamingDraft(null);
+        return;
+      }
+      try {
+        const [resumed, history] = await Promise.all([
+          resumeChat(resumeId),
+          getMessages(resumeId),
+        ]);
+        if (cancelled) return;
+        setChat(resumed.chat);
+        setMessages(history.messages || []);
+        setStreamingDraft(null);
+      } catch (err) {
+        if (cancelled) return;
+        showError(err, "Could not resume chat");
+        setSearchParams({}, { replace: true });
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [resumeId, setSearchParams]);
+
+  // If the user navigates away mid-conversation, demote to draft so it
+  // shows up in /client/drafts. Closed chats are skipped server-side.
+  // For fresh chats, also open the WS immediately so the backend greeting
+  // arrives before the user types their first message.
+  useEffect(() => {
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      const current = chatRef.current;
+      if (!current) return;
+      if (current.status === "active" || current.status === "waiting_confirmation") {
+        markChatAsDraft(current.id);
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [messages, streamingDraft]);
+
+  const displayMessages = resumeId ? messages : [GREETING_MSG, ...messages];
+
+  const latestSummaryId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.sender === "ai" && m.aiAnswerType === "summary") return m.id;
+    }
+    return null;
+  }, [messages]);
+
+  const latestAiMessageId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].sender === "ai") return messages[i].id;
+    }
+    return null;
+  }, [messages]);
+
+  const conversationTitle = useMemo(() => {
+    if (!chat) return "New conversation";
+    const summary = chat.summary?.trim();
+    if (summary) {
+      return summary.length > 52 ? `${summary.slice(0, 52)}…` : summary;
+    }
+    return "Support conversation";
+  }, [chat]);
+
+  const awaitingConfirmation = chat?.status === "waiting_confirmation";
+  const awaitingOptionChoice = (pendingOptions?.options?.length ?? 0) > 0;
+  const chatClosed = chat?.status === "closed";
+
+  const ensureChat = useCallback(async () => {
+    if (chat) return chat;
+    const created = await createChat();
+    setChat(created.chat);
+    return created.chat;
+  }, [chat]);
+
+  function appendAiMessage(content, extra = {}) {
+    if (!content) return;
+    setMessages((prev) => [
+      ...prev,
+      createLocalMessage({
+        sender: "ai",
+        content,
+        chatId: chatRef.current?.id,
+        extra,
+      }),
+    ]);
+  }
+
+  function handleWsMessage(data) {
+    if (data.type === "token") {
+      const newContent = (streamingContentRef.current ?? "") + data.token;
+      streamingContentRef.current = newContent;
+      setStreamingDraft({ id: "streaming", content: newContent });
+      return;
+    }
+
+    if (data.type === "message") {
+      streamingContentRef.current = "";
+      setStreamingDraft(null);
+      if (data.message) {
+        setMessages((prev) => [...prev, data.message]);
+      } else {
+        appendAiMessage(data.content ?? "");
+      }
+      setSending(false);
+      return;
+    }
+
+    if (data.type === "options") {
+      const content = data.content ?? "";
+      const options = Array.isArray(data.options) ? data.options : [];
+      streamingContentRef.current = "";
+      setStreamingDraft(null);
+
+      if (content) {
+        setMessages((prev) => {
+          const lastAi = [...prev].reverse().find((m) => m.sender === "ai");
+          if (lastAi?.content === content) return prev;
+          return [
+            ...prev,
+            createLocalMessage({
+              sender: "ai",
+              content,
+              chatId: chatRef.current?.id,
+            }),
+          ];
+        });
+      }
+
+      if (options.length > 0) {
+        setPendingOptions({ content, options });
+      } else {
+        setPendingOptions(null);
+      }
+      setSending(false);
+      return;
+    }
+
+    if (data.type === "ticket_created") {
+      streamingContentRef.current = "";
+      setStreamingDraft(null);
+      setPendingOptions(null);
+      appendAiMessage(data.content ?? "Your ticket has been created.", {
+        ticketId: data.ticket_id ?? data.ticketId ?? null,
+        aiAnswerType: "ticket_created",
+      });
+      showSuccess("Ticket created");
+      setSending(false);
+      return;
+    }
+
+    if (data.type === "user_message_saved" && data.message) {
+      return;
+    }
+  }
+
+  function connectWS(chatId) {
+    if (wsRef.current) {
+      closingRef.current = true;
+      wsRef.current.close();
+    }
+    if (pendingFirstMessage.current) setSending(true);
+    const token = getToken();
+    const params = new URLSearchParams();
+    if (token) params.set("token", token);
+    if (chatId) params.set("chat_id", chatId);
+    const ws = new WebSocket(
+      `ws://${window.location.hostname}:8000/ws/chat?${params}`,
+    );
+    wsRef.current = ws;
+    ws.onopen = () => {
+      // Send the pending first message as soon as the connection is ready.
+      // The backend waits for this before starting the workflow.
+      if (pendingFirstMessage.current) {
+        const msg = pendingFirstMessage.current;
+        pendingFirstMessage.current = null;
+        ws.send(msg);
+      }
+    };
+    ws.onmessage = (e) => {
+      try {
+        handleWsMessage(JSON.parse(e.data));
+      } catch (err) {
+        console.error("WS parse error", err);
+      }
+    };
+    ws.onerror = () => {
+      if (!closingRef.current) {
+        showError("WebSocket connection error");
+        setSending(false);
+        setStreamingDraft(null);
+      }
+      closingRef.current = false;
+    };
+    ws.onclose = () => {
+      closingRef.current = false;
+      wsRef.current = null;
+    };
+  }
+
+  function handleOpenFilePicker() {
+    fileInputRef.current?.click();
+  }
+
+  function handleFileChange(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!isAllowedMime(file.type)) {
+      showError(
+        "Only images, PDFs and text files are supported as attachments.",
+      );
+      return;
+    }
+    if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
+      showError(`Files must be smaller than ${MAX_UPLOAD_MB} MB.`);
+      return;
+    }
+    setPendingFile(file);
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    const trimmed = messageInput.trim();
+    if ((!trimmed && !pendingFile) || sending) return;
+    if (chatClosed) {
+      showError("This chat is closed. Start a new one.");
+      return;
+    }
+    if (awaitingConfirmation) {
+      showError("Please confirm or reject the summary above first.");
+      return;
+    }
+    if (awaitingOptionChoice) {
+      showError("Please choose one of the options above to continue.");
+      return;
+    }
+
+    setSending(true);
+    const contentToSend = trimmed || `Attached: ${pendingFile?.name ?? "file"}`;
+    const fileToSend = pendingFile;
+    setMessageInput("");
+    setPendingFile(null);
+
+    let activeChat;
+    try {
+      activeChat = await ensureChat();
+    } catch (err) {
+      setSending(false);
+      showError(err, "Could not start chat");
+      return;
+    }
+
+    let attachmentId = null;
+    if (fileToSend) {
+      setUploading(true);
+      try {
+        const att = await uploadAttachment({
+          chatId: activeChat.id,
+          file: fileToSend,
+        });
+        attachmentId = att?.id ?? null;
+      } catch (err) {
+        setUploading(false);
+        setSending(false);
+        showError(err, "Upload failed");
+        setPendingFile(fileToSend);
+        return;
+      } finally {
+        setUploading(false);
+      }
+    }
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `user-${Date.now()}`,
+        chatId: activeChat.id,
+        sender: "user",
+        content: contentToSend,
+        aiAnswerType: "normal",
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+    streamingContentRef.current = "";
+    setStreamingDraft({ id: "streaming", content: "" });
+
+    const wsPayload = JSON.stringify({
+      content: contentToSend,
+      attachmentIds: attachmentId ? [attachmentId] : [],
+    });
+
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(wsPayload);
+    } else {
+      pendingFirstMessage.current = wsPayload;
+      connectWS(activeChat.id);
+    }
+  }
+
+  async function handleOptionChoice(option) {
     if (!option || sending || !pendingOptions) return;
     if (chatClosed) {
       showError("This chat is closed. Start a new one.");
@@ -222,319 +564,301 @@ export default function ClientCreateTicket() {
     }
   }
 
-useEffect(() => {
-  let cancelled = false;
-  
-  async function initializeChat() {
+  async function handleConfirm(accepted) {
+    if (!chat || confirming) return;
+    setConfirming(true);
     try {
-      if (chatId) {
-        // Resume existing chat from URL parameter
-        const [resumed, history] = await Promise.all([
-          resumeChat(chatId),
-          getMessages(chatId),
-        ]);
-        
-        if (cancelled) return;
-        setChat(resumed.chat);
-        setMessages(history.messages || []);
-      } else {
-        // Create brand new chat
-        const created = await createChat();
-        if (cancelled) return;
-        setChat(created.chat);
-        setMessages([]);
-      }
-    } catch (err) {
-      if (cancelled) return;
-      showError(err, "Could not initialize chat");
-    }
-  }
-  
-  initializeChat();
-  
-  return () => {
-    cancelled = true;
-  };
-}, [chatId]); // Only depends on chatId from URL
-
-// Step 2: Keep chatRef in sync with chat state
-useEffect(() => {
-  chatRef.current = chat;
-}, [chat]);
-
-// Mark as draft when navigating away or closing the tab mid-flow.
-// mark_as_draft on the backend is a no-op for already-closed issues.
-useEffect(() => {
-  if (!chat) return;
-  const markDraft = () => {
-    if (chatRef.current?.id) markChatAsDraft(chatRef.current.id);
-  };
-  window.addEventListener("beforeunload", markDraft);
-  return () => {
-    window.removeEventListener("beforeunload", markDraft);
-    markDraft(); // also fires on React unmount (SPA navigation)
-  };
-}, [chat?.id]);
-
-// Step 3: Connect WebSocket ONLY after chat is initialized
-useEffect(() => {
-  if (!chat) return; // Wait for chat to be created/loaded
-
-    const wsParams = new URLSearchParams();
-    if (token) wsParams.set("token", token);
-    wsParams.set("chat_id", chat.id); // Always use chat.id, never URL param
-    const wsUrl = `ws://${window.location.hostname}:8000/ws/chat?${wsParams}`;
-    if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
-      return;
-    }
-    
-    const setupWebSocket = () => {
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        console.log("[WS] Connected");
-        setWsConnected(true);
-        setAiWaitingForInput(false);
-        showSuccess("Connected to server");
-        
-      }; 
-
-      ws.onmessage = (e) => {
-        console.log("[WS] Message received:", e.data);
-        try {
-          const data = JSON.parse(e.data);
-          console.log(chatRef.current)
-          if (data.type === "options") {
-            setAiWaitingForInput(true);
-            if (data.content) {
-              const optionsHint = data.options && data.options.length > 0
-                ? ` (${data.options.join(" / ")})`
-                : "";
-              setMessages((prev) => [...prev, {
-                id: `ai-${Date.now()}`,
-                sender: "ai",
-                content: `${data.content}${optionsHint}`,
-                aiAnswerType: "normal",
-                createdAt: new Date().toISOString(),
-              }]);
-            }
-          }
-          else if (data.type === "message" && data.content) {
-            setAiWaitingForInput(false);
-            setMessages((prev) => [...prev, {
-              id: `ai-${Date.now()}`,
-              sender: "ai",
-              content: data.content,
-              aiAnswerType: "normal",
-              createdAt: new Date().toISOString(),
-            }]);
-          }
-          // ignore unknown/internal workflow messages
-        } catch (err) {
-          setMessages((prev) => [...prev, {
-            id: `ai-${Date.now()}`,
+      const result = await confirmSummary(chat.id, accepted);
+      setChat(result.chat);
+      if (accepted && result.ticket) {
+        showSuccess("Ticket created");
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `local-${Date.now()}`,
+            chatId: chat.id,
             sender: "ai",
-            content: e.data,
+            content:
+              "Thank you for confirming. Your ticket is now in progress. You can follow the status on your dashboard.",
             aiAnswerType: "normal",
             createdAt: new Date().toISOString(),
-          }]);
-        }
-      }; 
-
-      ws.onerror = (error) => {
-        console.error("[WS] Error:", error);
-        showError(`WebSocket error`);
-        setWsConnected(false);
-      };
-
-      ws.onclose = () => {
-        console.log("[WS] Disconnected");
-        setWsConnected(false);
-        setAiWaitingForInput(false);
-      };
-    };
-
-    setupWebSocket();
-
-    return () => {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.close();
+          },
+        ]);
+      } else if (!accepted) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `local-${Date.now()}`,
+            chatId: chat.id,
+            sender: "ai",
+            content:
+              "No problem. Tell me what we should change and I’ll update the summary.",
+            aiAnswerType: "normal",
+            createdAt: new Date().toISOString(),
+          },
+        ]);
       }
-    };
-  }, [chat]);
-
-  // Auto-scroll to bottom when messages update
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [messages]);
-    const displayMessages = chatId ? messages : [...messages];
-  // Handle file selection
-  const handleOpenFilePicker = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    if (!isAllowedMime(file.type)) {
-      showError("Only images, PDFs, and text files are supported as attachments.");
-      return;
-    }
-    if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
-      showError(`Files must be smaller than ${MAX_UPLOAD_MB} MB.`);
-      return;
-    }
-    setPendingFile(file);
-  };
-
-  // Handle form submission
-const handleSubmit = async (event) => {
-  event.preventDefault();
-  const trimmed = messageInput.trim();
-  if ((!trimmed && !pendingFile) || sending || !aiWaitingForInput) return;
-
-  setSending(true);
-  setAiWaitingForInput(false);
-  const contentToSend = trimmed || `Attached: ${pendingFile?.name ?? "file"}`;
-  setMessageInput("");
-  setPendingFile(null);
-
-  // Add user message to UI immediately
-  setMessages((prev) => [
-    ...prev,
-    {
-      id: `user-${Date.now()}`,
-      sender: "user",
-      content: contentToSend,
-      aiAnswerType: "normal",
-      createdAt: new Date().toISOString(),
-      attachments: pendingFile ? [{ id: "temp", filename: pendingFile.name }] : [],
-    },
-  ]);
-
-  // Upload file if attached (but don't send attachment ID in the message)
-  if (pendingFile) {
-    setUploading(true);
-    try {
-      await uploadAttachment({
-        chatId: "temp", // Replace with actual chat ID if needed
-        file: pendingFile,
-      });
-      // Optionally update the message with the attachment ID later
     } catch (err) {
-      showError(err, "Upload failed");
+      showError(err, "Could not record your choice");
     } finally {
-      setUploading(false);
+      setConfirming(false);
     }
   }
 
-  // Send raw text via WebSocket (like the simple script)
-  if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-    wsRef.current.send(contentToSend); // Send raw text, not JSON
-  } else {
-    showError("WebSocket not connected");
-  }
-  setSending(false);
-};
-
-  // Start a new chat
-  const handleNewChat = async () => {
-    if (wsRef.current) {
-      wsRef.current.onclose = null;
-      wsRef.current.close();
-      wsRef.current = null;
+  function handleNewChat() {
+    pendingFirstMessage.current = null;
+    streamingContentRef.current = "";
+    if (chat && (chat.status === "active" || chat.status === "waiting_confirmation")) {
+      markChatAsDraft(chat.id);
     }
+    setChat(null);
     setMessages([]);
+    setStreamingDraft(null);
     setMessageInput("");
-    setPendingFile(null);
-    setWsConnected(false);
-    setAiWaitingForInput(false);
-    setSearchParams({});
+    setAttachedFile(null);
+    setPendingOptions(null);
+    setIsFirstMessage(true);
+    if (resumeId) setSearchParams({}, { replace: true });
+    connectWS(null);
+  }
 
-    try {
-      const created = await createChat();
-      setChat(created.chat); // triggers WS effect with correct chat.id
-    } catch (err) {
-      showError(err, "Could not start new chat");
-    }
-  };
-
-  // Share chat link
-  const handleShare = () => {
+  function handleShare() {
     const url = typeof window !== "undefined" ? window.location.href : "";
     if (navigator.share) {
-      navigator.share({ title: "Chat", url }).catch(() => {});
+      navigator.share({ title: conversationTitle, url }).catch(() => {});
     } else if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(url);
       showSuccess("Link copied");
     }
-  };
+  }
 
-  // Render a single message
-  const renderMessage = (msg) => {
+  function handleSuggestedPrompt(prompt) {
+    if (sending || chatClosed || awaitingConfirmation || awaitingOptionChoice) {
+      return;
+    }
+    setMessageInput(prompt);
+    messageInputRef.current?.focus();
+  }
+
+  function renderMessageBody(msg, isUser) {
+    const showConfirm =
+      !isUser &&
+      msg.aiAnswerType === "summary" &&
+      msg.id === latestSummaryId &&
+      awaitingConfirmation;
+    const showOptionButtons =
+      !isUser &&
+      msg.id === latestAiMessageId &&
+      awaitingOptionChoice &&
+      pendingOptions?.options?.length > 0;
+
+    if (showConfirm) {
+      return (
+        <>
+          <p>
+            Here’s how I understand your request. Please confirm before I open
+            the ticket.
+          </p>
+          <div className="mt-3 rounded-xl border border-border-subtle bg-surface-muted p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-content-muted">
+              Summary
+            </p>
+            <MarkdownMessage className="mt-1.5 leading-relaxed">
+              {msg.content}
+            </MarkdownMessage>
+          </div>
+          <p className="mt-3">Do you confirm this is correct?</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={`${btnNo} ${confirming ? "pointer-events-none opacity-45" : ""}`}
+              onClick={() => handleConfirm(false)}
+              disabled={confirming}
+            >
+              No
+            </button>
+            <button
+              type="button"
+              className={`${btnYes} ${confirming ? "pointer-events-none opacity-45" : ""}`}
+              onClick={() => handleConfirm(true)}
+              disabled={confirming}
+            >
+              Yes
+            </button>
+          </div>
+        </>
+      );
+    }
+
+    if (showOptionButtons) {
+      return (
+        <>
+          <MarkdownMessage>{msg.content}</MarkdownMessage>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {pendingOptions.options.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={`${btnYes} ${sending ? "pointer-events-none opacity-45" : ""}`}
+                onClick={() => handleOptionChoice(option)}
+                disabled={sending}
+              >
+                {formatOptionLabel(option)}
+              </button>
+            ))}
+          </div>
+        </>
+      );
+    }
+
+    return (
+      <>
+        {isUser ? (
+          <p>{msg.content}</p>
+        ) : (
+          <MarkdownMessage>{msg.content}</MarkdownMessage>
+        )}
+        {msg.ticketId ? (
+          <p className="mt-2 text-[11px] font-medium text-content-muted">
+            Ticket ID: {msg.ticketId}
+          </p>
+        ) : null}
+        {msg.attachments?.length ? (
+          <div className="mt-2 flex flex-col gap-1.5">
+            {msg.attachments.map((att) => (
+              <AttachmentChip key={att.id} attachment={att} />
+            ))}
+          </div>
+        ) : null}
+      </>
+    );
+  }
+
+  function renderMessage(msg) {
     const isUser = msg.sender === "user";
     const time = formatTime(msg.createdAt);
 
+    if (!isUser) {
+      return (
+        <motion.div
+          key={msg.id}
+          layout
+          className="client-chat-row client-chat-row--team flex w-full"
+          {...messageBubble}
+        >
+          <div className="client-assistant-block">
+            <Avatar src={teamAvatar} label="Ruag Team" />
+            <div className="client-assistant-col">
+              <p className="client-chat-meta">
+                <strong>Ruag Team</strong>
+                {time ? <> · {time}</> : null}
+              </p>
+              <div className="client-chat-bubble-team mt-1.5 whitespace-pre-wrap">
+                {renderMessageBody(msg, false)}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      );
+    }
 
     return (
-      <article
+      <motion.div
         key={msg.id}
-        className={isUser ? "ml-auto w-full max-w-[min(100%,560px)]" : "w-full max-w-[min(100%,560px)]"}
+        layout
+        className="client-chat-row client-chat-row--user flex w-full"
+        {...messageBubble}
       >
-        <p className={`mb-2 text-[14px] font-semibold leading-none text-[#101827] ${isUser ? "text-right pr-11" : "pl-12"}`}>
-          {isUser ? "You" : "Team"}
-          {time ? `, ${time}` : ""}
-        </p>
-        <div className={`flex items-end gap-2 ${isUser ? "justify-end" : "justify-start"}`}>
-          {!isUser ? <Avatar src={teamAvatar} label="Team" /> : null}
-          <div className={`max-w-[560px] ${isUser ? bubbleUser : bubbleTeam}`}>
-            {isUser ? (
-              <p className="whitespace-pre-wrap">{msg.content}</p>
-            ) : (
-              <MarkdownMessage>{msg.content}</MarkdownMessage>
-            )}
-            {msg.attachments?.length ? (
-              <div className="mt-2 flex flex-col gap-1.5">
-                {msg.attachments.map((att) => (
-                  <AttachmentChip key={att.id} attachment={att} />
-                ))}
-              </div>
-            ) : null}
+        <div className="client-chat-user-col">
+          <p className="client-chat-meta text-right">
+            <strong>You</strong>
+            {time ? <> · {time}</> : null}
+          </p>
+          <div className="flex items-end gap-2.5">
+            <div className="client-chat-bubble-user min-w-0 whitespace-pre-wrap">
+              {renderMessageBody(msg, true)}
+            </div>
+            <Avatar src={userAvatar} label="You" />
           </div>
-          {isUser ? <Avatar src={userAvatar} label="You" /> : null}
         </div>
-      </article>
+      </motion.div>
     );
-  };
+  }
 
+  function renderStreaming() {
+    if (!streamingDraft) return null;
+    if (!streamingDraft.content?.trim()) {
+      return <TypingIndicator />;
+    }
 
-  const inputDisabled = !wsConnected || !aiWaitingForInput || sending;
+    const time = formatTime(new Date().toISOString());
+    return (
+      <motion.div
+        className="client-chat-row client-chat-row--team flex w-full"
+        {...messageBubble}
+      >
+        <div className="client-assistant-block">
+          <Avatar src={teamAvatar} label="Ruag Team" />
+          <div className="client-assistant-col">
+            <p className="client-chat-meta">
+              <strong>Ruag Team</strong>
+              {time ? <> · {time}</> : null}
+            </p>
+            <div className="client-chat-bubble-team mt-1.5 whitespace-pre-wrap">
+              {streamingDraft.content}
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  const placeholderText = chat
+    ? chatClosed
+      ? "This chat is closed. Click ‘New Chat’ to start another."
+      : awaitingConfirmation
+        ? "Please answer Yes or No above to continue."
+        : awaitingOptionChoice
+          ? "Please choose one of the options above to continue."
+          : "Write your message..."
+    : "Describe your issue to start a new chat...";
+
+  const inputDisabled =
+    sending || chatClosed || awaitingConfirmation || awaitingOptionChoice;
 
   return (
     <PortalLayout mode="client">
-      <section className="mx-auto flex h-[calc(100dvh-6rem)] max-h-[calc(100dvh-6rem)] min-h-0 w-full max-w-[920px] flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
-        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/90 bg-white px-4 py-3 sm:px-5">
-          <div className="flex items-center gap-3">
-            <h1 className="text-[18px] font-semibold leading-tight text-[#0f172a] sm:text-[20px]">
-              Chat
+      <motion.section className="client-chat-shell" {...scaleIn}>
+        <header className="client-chat-header flex shrink-0 flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+            <h1 className="client-chat-header-title truncate">
+              {conversationTitle}
             </h1>
+            <span className="client-chat-status-badge shrink-0">
+              {formatChatStatus(chat?.status ?? "active")}
+            </span>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => navigate("/client/drafts")}
+              className="client-chat-header-btn hidden sm:inline-flex"
+            >
+              Drafts
+            </button>
             <button
               type="button"
               onClick={handleShare}
-              className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-white px-4 py-2 text-[13px] font-medium text-[#111827] shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition hover:bg-slate-50"
+              className="client-chat-header-btn"
+              aria-label="Share conversation"
             >
-              <FaRegShareFromSquare className="text-[14px]" aria-hidden />
-              Share
+              <FaRegShareFromSquare className="text-[13px]" aria-hidden />
+              <span className="hidden sm:inline">Share</span>
             </button>
             <button
               type="button"
               onClick={handleNewChat}
-              className="rounded-full bg-[#020c3d] px-4 py-2 text-[13px] font-semibold text-white shadow-[0_1px_2px_rgba(16,24,40,0.18)] transition hover:bg-[#0a1a5c]"
+              className="client-chat-header-btn client-chat-header-btn--primary"
             >
               New Chat
             </button>
@@ -544,7 +868,7 @@ const handleSubmit = async (event) => {
         <div ref={scrollRef} className={`client-chat-messages ${scrollPretty}`}>
           <div className="client-chat-thread">
             {displayMessages.map(renderMessage)}
-            {messages.length === 0 ? (
+            {messages.length === 0 && !streamingDraft ? (
               <motion.div
                 className="mt-1 grid gap-2 sm:grid-cols-2"
                 {...fadeInUp}
@@ -562,14 +886,11 @@ const handleSubmit = async (event) => {
                 ))}
               </motion.div>
             ) : null}
-            {/**/} 
+            {renderStreaming()}
           </div>
         </div>
 
-        <form
-          onSubmit={handleSubmit}
-          className="shrink-0 border-t border-slate-200/90 bg-white px-4 pb-4 pt-3 sm:px-6"
-        >
+        <form onSubmit={handleSubmit} className="client-chat-footer">
           <input
             ref={fileInputRef}
             type="file"
@@ -578,17 +899,17 @@ const handleSubmit = async (event) => {
             className="hidden"
           />
           {pendingFile ? (
-            <div className="mx-auto mb-2 flex max-w-[720px] items-center justify-end">
-              <span className="inline-flex max-w-full items-center gap-2 truncate rounded-full bg-[#E7F3FF] px-3 py-1 text-[12px] font-medium text-[#1e293b] ring-1 ring-sky-200/40">
+            <div className="mx-auto mb-2 flex w-full max-w-[1000px] items-center justify-end">
+              <span className="inline-flex max-w-full items-center gap-2 truncate rounded-full bg-[var(--client-chat-user-bg)] px-3 py-1 text-[12px] font-medium text-[var(--client-chat-user-fg)] ring-1 ring-[var(--client-chat-user-ring)]">
                 <FiPaperclip className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 <span className="truncate">{pendingFile.name}</span>
-                <span className="shrink-0 text-slate-500">
+                <span className="shrink-0 text-content-muted">
                   {formatBytes(pendingFile.size)}
                 </span>
                 <button
                   type="button"
                   onClick={() => setPendingFile(null)}
-                  className="text-slate-500 hover:text-slate-800"
+                  className="text-content-muted hover:text-content"
                   aria-label="Remove attachment"
                 >
                   <FiX className="h-3.5 w-3.5" />
@@ -596,12 +917,12 @@ const handleSubmit = async (event) => {
               </span>
             </div>
           ) : null}
-          <div className="mx-auto flex max-w-[720px] items-center gap-1 rounded-2xl border border-[#e7e9ef] bg-white px-3 py-2 shadow-[0_1px_1px_rgba(16,24,40,0.04)]">
+          <div className="client-chat-composer">
             <button
               type="button"
               onClick={handleOpenFilePicker}
               disabled={inputDisabled}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="client-chat-composer-icon"
               aria-label="Add attachment"
               title="Attach an image, PDF or text file"
             >
@@ -611,47 +932,49 @@ const handleSubmit = async (event) => {
               Write your message
             </label>
             <input
+              ref={messageInputRef}
               id="create-ticket-message"
               type="text"
               value={messageInput}
               onChange={(e) => setMessageInput(e.target.value)}
-              placeholder={uploading ? "Uploading attachment..." : "Write your message..."}
+              placeholder={
+                uploading ? "Uploading attachment..." : placeholderText
+              }
               disabled={inputDisabled}
-              className="min-h-[44px] min-w-0 flex-1 border-0 bg-transparent text-[15px] text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:ring-0 disabled:cursor-not-allowed"
+              className="min-h-[46px] min-w-0 flex-1 border-0 bg-transparent px-1 text-[15px] text-content placeholder:text-content-muted focus:outline-none focus:ring-0 disabled:cursor-not-allowed"
             />
-            <button
-              type="button"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#c2c8d3] transition hover:text-slate-600"
-              aria-label="Emoji"
-              disabled
-            >
-              <FiSmile className="text-[17px]" />
-            </button>
-            <button
-              type="button"
-              onClick={handleOpenFilePicker}
-              disabled={inputDisabled}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#c2c8d3] transition hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label="Attach file"
-            >
-              <FiPaperclip className="text-[17px]" />
-            </button>
-            <button
-              type="submit"
-              disabled={inputDisabled || (!messageInput.trim() && !pendingFile)}
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#020c3d] text-white shadow-sm transition hover:bg-[#0a1a5c] disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label="Send message"
-            >
-              <FiSend className="text-[18px]" />
-            </button>
-          </div>
-          {!wsConnected && (
-            <div className="mt-2 text-center text-red-500 text-sm">
-              Disconnected from server. Reconnecting...
+            <div className="client-chat-composer-tools">
+              <button
+                type="button"
+                className="client-chat-composer-icon"
+                aria-label="Emoji"
+                disabled
+              >
+                <FiSmile className="text-[17px]" />
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenFilePicker}
+                disabled={inputDisabled}
+                className="client-chat-composer-icon"
+                aria-label="Attach file"
+              >
+                <FiPaperclip className="text-[17px]" />
+              </button>
+              <button
+                type="submit"
+                disabled={
+                  inputDisabled || (!messageInput.trim() && !pendingFile)
+                }
+                className="client-chat-send-btn"
+                aria-label="Send message"
+              >
+                <FiSend className="text-[17px]" />
+              </button>
             </div>
-          )}
+          </div>
         </form>
-      </section>
+      </motion.section>
     </PortalLayout>
   );
 }
