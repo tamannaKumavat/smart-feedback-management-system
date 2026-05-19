@@ -63,6 +63,8 @@ class InterruptData(TypedDict):
     options: list
 
 class SmartFeedbackState(TypedDict):
+    issue_id: str
+    user_id: str
     user_query: str
     prior_history: list  # [{sender, content}] from DB — conversation so far
     chat_history: Annotated[list, add_messages]
@@ -78,9 +80,9 @@ class SmartFeedbackState(TypedDict):
     engagement_response: str       # RAG answer composed by Phase 2 engagement_with_user
     final_user_response: str       # closing message sent at end_node (triage or RAG confirmed)
     ready_to_create_ticket: bool   # True after Phase 2
-    #ticket_summary: str            # structured ticket body built by formulate_ticket_content
-    ticket_content: str
-    ticket_summary: str
+    ticket_summary: str            # structured ticket body built by formulate_ticket_content
+    ticket_content: str            # structured ticket body built by formulate_ticket_content
+    jira_ticket: dict              # Jira issue metadata after add_ticket_to_jira
     ticket_data: dict
     incident_assessment: Annotated[List[IncidentAssessment], add]
     incident_assessment_judge: Annotated[List[IncidentAssessmentJudge], add]

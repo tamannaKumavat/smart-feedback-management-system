@@ -28,9 +28,12 @@ from sqlalchemy import (
     JSON,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
+from pgvector.sqlalchemy import Vector
 
 from db import Base
 from pgvector.sqlalchemy import Vector
+
+TICKET_EMBEDDING_DIM = 768
 
 
 def _new_uuid() -> str:
@@ -82,6 +85,8 @@ class Issue(Base):
         String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    response: Mapped[str | None] = mapped_column(Text, nullable=True)
+    response_comments: Mapped[list | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default=ISSUE_STATUS_ACTIVE
     )
@@ -199,6 +204,14 @@ class Ticket(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=TICKET_STATUS_NEW)
     labels: Mapped[list | None] = mapped_column(JSON, nullable=True)
     recommended_action: Mapped[str | None] = mapped_column(Text, nullable=True)
+    response: Mapped[str | None] = mapped_column(Text, nullable=True)
+    response_comments: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    summary_embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(TICKET_EMBEDDING_DIM), nullable=True
+    )
+    response_embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(TICKET_EMBEDDING_DIM), nullable=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -208,4 +221,3 @@ class Ticket(Base):
     )
 
     issue: Mapped[Issue] = relationship("Issue", back_populates="tickets")
-

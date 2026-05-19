@@ -10,6 +10,7 @@ import {
   FiVideo,
 } from "react-icons/fi";
 import { IoTicketOutline } from "react-icons/io5";
+import MarkdownMessage from "../../MarkdownMessage.jsx";
 import {
   confirmationFollowUp,
   getTicketHistoryMessagesForThread,
@@ -357,12 +358,22 @@ export default function TicketHistory({
                           }
                         >
                           {msg.type === "text" && msg.body ? (
-                            <p>{msg.body}</p>
+                            outgoing ? (
+                              <p className="whitespace-pre-wrap">{msg.body}</p>
+                            ) : (
+                              <MarkdownMessage>{msg.body}</MarkdownMessage>
+                            )
                           ) : null}
 
                           {isConfirmation ? (
                             <>
-                              {msg.body ? <p>{msg.body}</p> : null}
+                              {msg.body ? (
+                                outgoing ? (
+                                  <p className="whitespace-pre-wrap">{msg.body}</p>
+                                ) : (
+                                  <MarkdownMessage>{msg.body}</MarkdownMessage>
+                                )
+                              ) : null}
                               <div className="mt-3 rounded-xl border border-border-subtle bg-surface-muted p-3">
                                 <p className="text-[10px] font-semibold uppercase tracking-wide text-content-muted">
                                   Summary

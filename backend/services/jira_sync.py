@@ -1,5 +1,6 @@
 import base64
 import json
+import logging
 from json import JSONDecodeError
 import re
 from dataclasses import dataclass, field
@@ -18,12 +19,21 @@ from config import (
     JIRA_EMAIL,
     JIRA_FIELD_FEEDBACK_ISSUE_TYPE_ID,
     JIRA_FIELD_RECOMMENDED_ACTION_ID,
+    JIRA_FIELD_SEVERITY_ID,
     JIRA_FIELD_SOURCE_CASE_ID,
     JIRA_FIELD_TEAM_ID,
+    JIRA_FIELD_URGENCY_ID,
     JIRA_PROJECT_KEY,
+    JIRA_TEAM_ID_SECURITY,
+    JIRA_TEAM_ID_SOFTWARE_DEVELOPMENT,
+    JIRA_TEAM_ID_SUPPORT,
 )
+from db import SessionLocal
+from models.chat import Issue, Ticket
+from services.ticket_rag_ingest import is_done_status, upsert_done_ticket_rag_chunk
 
 DATASET_PATH = Path(__file__).resolve().parents[1] / "data" / "jira_ticket_dataset.json"
+log = logging.getLogger(__name__)
 
 
 class JiraConfigError(RuntimeError):
@@ -121,12 +131,53 @@ def add_adf_custom_field(fields: dict[str, Any], field_id: str, value: Any) -> N
         fields[field_id] = text_to_adf(str(value))
 
 
+def add_team_custom_field(fields: dict[str, Any], field_id: str, value: Any) -> None:
+    team_id = team_field_value(value)
+    if field_id and team_id:
+        fields[field_id] = team_id
+
+
 def read_custom_field_value(value: Any) -> Any:
     if isinstance(value, dict) and value.get("type") == "doc":
         return adf_to_text(value).strip()
     if isinstance(value, dict):
         return value.get("value") or value.get("name") or value.get("title")
     return value
+
+
+def latest_comment_text(issue: dict[str, Any]) -> str | None:
+    comments = (((issue.get("fields") or {}).get("comment") or {}).get("comments") or [])
+    if not comments:
+        return None
+    latest = max(comments, key=lambda comment: comment.get("created") or "")
+    body = latest.get("body")
+    text = adf_to_text(body).strip()
+    return text or None
+
+
+def jira_comment_snapshots(issue: dict[str, Any]) -> list[dict[str, Any]]:
+    comments = (((issue.get("fields") or {}).get("comment") or {}).get("comments") or [])
+    snapshots = []
+    for comment in sorted(comments, key=lambda item: item.get("created") or ""):
+        author = comment.get("author") or {}
+        body = adf_to_text(comment.get("body")).strip()
+        if not body:
+            continue
+        snapshots.append(
+            {
+                "id": comment.get("id"),
+                "body": body,
+                "created": comment.get("created"),
+                "updated": comment.get("updated"),
+                "author": {
+                    "account_id": author.get("accountId"),
+                    "display_name": author.get("displayName"),
+                    "email": author.get("emailAddress"),
+                    "active": author.get("active"),
+                },
+            }
+        )
+    return snapshots
 
 
 def user_snapshot(user: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -144,6 +195,53 @@ def named_items(items: list[dict[str, Any]] | None) -> list[str]:
     if not items:
         return []
     return [item.get("name") for item in items if item.get("name")]
+
+
+def label_value(labels: list[str] | None, prefix: str) -> str | None:
+    for label in labels or []:
+        if isinstance(label, str) and label.startswith(prefix):
+            return label.removeprefix(prefix)
+    return None
+
+
+def severity_field_value(record: dict[str, Any]) -> str | None:
+    severity = record.get("severity") or label_value(record.get("labels"), "severity_")
+    if severity in {None, ""}:
+        return None
+    severity = str(severity)
+    severity_by_level = {"1": "Low", "2": "Medium", "3": "High"}
+    severity_by_s_level = {"S1": "High", "S2": "Medium", "S3": "Low"}
+    if severity.upper() in severity_by_s_level:
+        return severity_by_s_level[severity.upper()]
+    if severity in severity_by_level:
+        return severity_by_level[severity]
+    return severity.capitalize()
+
+
+def urgency_field_value(record: dict[str, Any]) -> str | None:
+    urgency = record.get("urgency") or label_value(record.get("labels"), "urgency_")
+    if urgency in {None, ""}:
+        return None
+    return str(urgency).capitalize()
+
+
+def team_field_value(value: Any) -> str | None:
+    if value in {None, ""}:
+        return None
+
+    team = str(value).strip()
+    team_ids = {
+        "support": JIRA_TEAM_ID_SUPPORT,
+        "software_development": JIRA_TEAM_ID_SOFTWARE_DEVELOPMENT,
+        "security": JIRA_TEAM_ID_SECURITY,
+    }
+    if team in team_ids:
+        return team_ids[team] or None
+
+    # Jira's Atlassian Team field expects the Team ID directly.
+    if re.fullmatch(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", team):
+        return team
+    return None
 
 
 def issue_fields_from_record(record: dict[str, Any]) -> dict[str, Any]:
@@ -167,12 +265,14 @@ def issue_fields_from_record(record: dict[str, Any]) -> dict[str, Any]:
         JIRA_FIELD_FEEDBACK_ISSUE_TYPE_ID,
         record.get("issue_type"),
     )
-    add_text_custom_field(fields, JIRA_FIELD_TEAM_ID, record.get("team"))
+    add_team_custom_field(fields, JIRA_FIELD_TEAM_ID, record.get("team"))
     add_adf_custom_field(
         fields,
         JIRA_FIELD_RECOMMENDED_ACTION_ID,
         record.get("recommended_action"),
     )
+    add_option_custom_field(fields, JIRA_FIELD_SEVERITY_ID, severity_field_value(record))
+    add_option_custom_field(fields, JIRA_FIELD_URGENCY_ID, urgency_field_value(record))
     return fields
 
 
@@ -262,6 +362,7 @@ class JiraClient:
             "updated",
             "resolution",
             "resolutiondate",
+            "comment",
             "components",
             "fixVersions",
             "versions",
@@ -274,6 +375,8 @@ class JiraClient:
                 JIRA_FIELD_FEEDBACK_ISSUE_TYPE_ID,
                 JIRA_FIELD_TEAM_ID,
                 JIRA_FIELD_RECOMMENDED_ACTION_ID,
+                JIRA_FIELD_SEVERITY_ID,
+                JIRA_FIELD_URGENCY_ID,
             ]
             if field_id
         )
@@ -285,6 +388,14 @@ class JiraClient:
 
     def list_fields(self) -> list[dict[str, Any]]:
         return self.request("GET", "/rest/api/3/field")
+
+    def get_comments(self, issue_id_or_key: str) -> list[dict[str, Any]]:
+        response = self.request(
+            "GET",
+            f"/rest/api/3/issue/{issue_id_or_key}/comment",
+            query={"orderBy": "-created", "maxResults": 20},
+        )
+        return response.get("comments", [])
 
 
 def jira_browse_url(issue_key: str) -> str:
@@ -355,6 +466,12 @@ def update_record_from_issue(record: dict[str, Any], issue: dict[str, Any]) -> N
     record["recommended_action"] = read_custom_field_value(
         fields.get(JIRA_FIELD_RECOMMENDED_ACTION_ID)
     ) or record.get("recommended_action")
+    record["severity"] = read_custom_field_value(fields.get(JIRA_FIELD_SEVERITY_ID)) or record.get(
+        "severity"
+    )
+    record["urgency"] = read_custom_field_value(fields.get(JIRA_FIELD_URGENCY_ID)) or record.get(
+        "urgency"
+    )
     assignee = fields.get("assignee") or {}
     record["assignee"] = assignee.get("displayName") or assignee.get("accountId")
     record["jira_assignee"] = user_snapshot(fields.get("assignee"))
@@ -413,11 +530,125 @@ def apply_jira_webhook(payload: dict[str, Any]) -> dict[str, Any]:
     if not issue_key and not issue_id:
         return {"updated": False, "reason": "payload did not contain an issue"}
 
-    records = load_ticket_dataset()
-    for record in records:
-        if record.get("jira_key") == issue_key or record.get("jira_id") == issue_id:
-            update_record_from_issue(record, issue)
-            save_ticket_dataset(records)
-            return {"updated": True, "jira_key": issue_key, "case_id": record.get("case_id")}
+    issue_ref = issue_key or issue_id
+    try:
+        client = JiraClient()
+        issue = client.get_issue(issue_ref)
+        issue.setdefault("fields", {})["comment"] = {"comments": client.get_comments(issue_ref)}
+    except (JiraConfigError, JiraApiError) as error:
+        log.warning("Jira webhook could not refresh issue %s: %s", issue_ref, error)
 
-    return {"updated": False, "reason": "issue is not linked in dataset", "jira_key": issue_key}
+    ticket_db_result = update_ticket_db_from_issue(issue)
+    log.info("Jira webhook processed issue=%s result=%s", issue_ref, ticket_db_result)
+
+    return {
+        "updated": ticket_db_result.get("updated"),
+        "jira_key": issue.get("key") or issue_key,
+        "ticket_db": ticket_db_result,
+    }
+
+
+def update_ticket_db_from_issue(issue: dict[str, Any]) -> dict[str, Any]:
+    fields = issue.get("fields") or {}
+    issue_key = issue.get("key")
+
+    if not JIRA_FIELD_SOURCE_CASE_ID:
+        return {
+            "updated": False,
+            "reason": "JIRA_FIELD_SOURCE_CASE_ID is not configured",
+            "jira_key": issue_key,
+        }
+
+    ticket_id = read_custom_field_value(fields.get(JIRA_FIELD_SOURCE_CASE_ID))
+    if not ticket_id:
+        return {
+            "updated": False,
+            "reason": "Jira issue does not include a source case id",
+            "jira_key": issue_key,
+        }
+
+    db = SessionLocal()
+    try:
+        ticket = db.get(Ticket, str(ticket_id))
+        if ticket is None:
+            return {
+                "updated": False,
+                "reason": "source case id does not match a ticket row",
+                "jira_key": issue_key,
+                "case_id": ticket_id,
+            }
+
+        changed_fields: list[str] = []
+
+        def set_if_changed(attr: str, value: Any) -> None:
+            if value is not None and getattr(ticket, attr) != value:
+                setattr(ticket, attr, value)
+                changed_fields.append(attr)
+
+        linked_issue = db.get(Issue, ticket.issue_id)
+
+        def set_issue_if_changed(attr: str, value: Any) -> None:
+            if (
+                linked_issue is not None
+                and value is not None
+                and getattr(linked_issue, attr) != value
+            ):
+                setattr(linked_issue, attr, value)
+                changed_fields.append(f"issue.{attr}")
+
+        latest_response = latest_comment_text(issue)
+        response_comments = jira_comment_snapshots(issue)
+
+        set_if_changed("summary", fields.get("summary"))
+        set_if_changed(
+            "description",
+            adf_to_text(fields.get("description", "")).strip(),
+        )
+        set_if_changed("priority", (fields.get("priority") or {}).get("name"))
+        set_if_changed("status", (fields.get("status") or {}).get("name"))
+        set_if_changed("response", latest_response)
+        set_if_changed("response_comments", response_comments)
+        set_issue_if_changed("response", latest_response)
+        set_issue_if_changed("response_comments", response_comments)
+        set_if_changed("labels", fields.get("labels") or [])
+        set_if_changed(
+            "issue_type",
+            read_custom_field_value(fields.get(JIRA_FIELD_FEEDBACK_ISSUE_TYPE_ID))
+            or (fields.get("issuetype") or {}).get("name"),
+        )
+        set_if_changed(
+            "team",
+            read_custom_field_value(fields.get(JIRA_FIELD_TEAM_ID)),
+        )
+        set_if_changed(
+            "recommended_action",
+            read_custom_field_value(fields.get(JIRA_FIELD_RECOMMENDED_ACTION_ID)),
+        )
+        assignee = fields.get("assignee") or {}
+        set_if_changed("assignee", assignee.get("displayName") or assignee.get("accountId"))
+
+        if changed_fields:
+            db.commit()
+            db.refresh(ticket)
+
+        rag_ingest = {"upserted": False, "reason": "ticket is not done"}
+        if is_done_status(ticket.status):
+            try:
+                rag_ingest = upsert_done_ticket_rag_chunk(db, ticket)
+            except Exception as error:
+                db.rollback()
+                rag_ingest = {
+                    "upserted": False,
+                    "reason": str(error),
+                    "case_id": ticket.case_id,
+                }
+
+        return {
+            "updated": True,
+            "jira_key": issue_key,
+            "case_id": ticket.case_id,
+            "changed_fields": changed_fields,
+            "rag_ingest": rag_ingest,
+        }
+    finally:
+        db.close()

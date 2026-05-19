@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaRegShareFromSquare } from "react-icons/fa6";
 import { FiPaperclip, FiPlus, FiSend, FiSmile, FiX } from "react-icons/fi";
+import MarkdownMessage from "../../components/MarkdownMessage.jsx";
 import PortalLayout from "../../layouts/PortalLayout.jsx";
 import {
   attachmentDownloadUrl,
@@ -78,6 +79,10 @@ function createLocalMessage({ sender, content, chatId, extra = {} }) {
     attachments: [],
     ...extra,
   };
+}
+
+function normalizeMessageContent(content) {
+  return String(content ?? "").replace(/\s+/g, " ").trim();
 }
 
 function AttachmentChip({ attachment }) {
@@ -335,8 +340,30 @@ export default function ClientCreateTicket() {
 
       if (content) {
         setMessages((prev) => {
-          const lastAi = [...prev].reverse().find((m) => m.sender === "ai");
-          if (lastAi?.content === content) return prev;
+          const lastAiIndex = prev.findLastIndex((m) => m.sender === "ai");
+          const lastAi = lastAiIndex >= 0 ? prev[lastAiIndex] : null;
+          const normalizedContent = normalizeMessageContent(content);
+          const normalizedLastAi = normalizeMessageContent(lastAi?.content);
+
+          if (
+            lastAi &&
+            (
+              normalizedLastAi === normalizedContent ||
+              normalizedContent.includes(normalizedLastAi) ||
+              normalizedLastAi.includes(normalizedContent)
+            )
+          ) {
+            const next = [...prev];
+            next[lastAiIndex] = {
+              ...lastAi,
+              content:
+                normalizedContent.length >= normalizedLastAi.length
+                  ? content
+                  : lastAi.content,
+            };
+            return next;
+          }
+
           return [
             ...prev,
             createLocalMessage({
@@ -662,7 +689,9 @@ export default function ClientCreateTicket() {
             <p className="text-[10px] font-semibold uppercase tracking-wide text-content-muted">
               Summary
             </p>
-            <p className="mt-1.5 leading-relaxed">{msg.content}</p>
+            <MarkdownMessage className="mt-1.5 leading-relaxed">
+              {msg.content}
+            </MarkdownMessage>
           </div>
           <p className="mt-3">Do you confirm this is correct?</p>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -690,7 +719,7 @@ export default function ClientCreateTicket() {
     if (showOptionButtons) {
       return (
         <>
-          <p>{msg.content}</p>
+          <MarkdownMessage>{msg.content}</MarkdownMessage>
           <div className="mt-3 flex flex-wrap gap-2">
             {pendingOptions.options.map((option) => (
               <button
@@ -710,7 +739,11 @@ export default function ClientCreateTicket() {
 
     return (
       <>
-        <p>{msg.content}</p>
+        {isUser ? (
+          <p>{msg.content}</p>
+        ) : (
+          <MarkdownMessage>{msg.content}</MarkdownMessage>
+        )}
         {msg.ticketId ? (
           <p className="mt-2 text-[11px] font-medium text-content-muted">
             Ticket ID: {msg.ticketId}
