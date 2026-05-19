@@ -81,6 +81,10 @@ function createLocalMessage({ sender, content, chatId, extra = {} }) {
   };
 }
 
+function normalizeMessageContent(content) {
+  return String(content ?? "").replace(/\s+/g, " ").trim();
+}
+
 function AttachmentChip({ attachment }) {
   const href = attachmentDownloadUrl(attachment.id);
   const isImage = attachment.mimeType?.startsWith("image/");
@@ -336,8 +340,30 @@ export default function ClientCreateTicket() {
 
       if (content) {
         setMessages((prev) => {
-          const lastAi = [...prev].reverse().find((m) => m.sender === "ai");
-          if (lastAi?.content === content) return prev;
+          const lastAiIndex = prev.findLastIndex((m) => m.sender === "ai");
+          const lastAi = lastAiIndex >= 0 ? prev[lastAiIndex] : null;
+          const normalizedContent = normalizeMessageContent(content);
+          const normalizedLastAi = normalizeMessageContent(lastAi?.content);
+
+          if (
+            lastAi &&
+            (
+              normalizedLastAi === normalizedContent ||
+              normalizedContent.includes(normalizedLastAi) ||
+              normalizedLastAi.includes(normalizedContent)
+            )
+          ) {
+            const next = [...prev];
+            next[lastAiIndex] = {
+              ...lastAi,
+              content:
+                normalizedContent.length >= normalizedLastAi.length
+                  ? content
+                  : lastAi.content,
+            };
+            return next;
+          }
+
           return [
             ...prev,
             createLocalMessage({
