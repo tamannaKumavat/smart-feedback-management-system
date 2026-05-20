@@ -15,7 +15,7 @@ function StatusPill({ status }) {
           color: TICKET_BADGE_LABEL.pending,
         }}
       >
-        Pending
+        In progress
       </span>
     );
   }
@@ -28,7 +28,7 @@ function StatusPill({ status }) {
           color: TICKET_BADGE_LABEL.unassigned,
         }}
       >
-        Unassigned
+        Received
       </span>
     );
   }
@@ -78,12 +78,15 @@ export default function ActiveTicketsCard({ items }) {
           All active tickets
         </h3>
         <div className="flex gap-3 text-[11px] font-medium sm:text-[12px]">
-          <span style={{ color: TICKET_STATUS_CHART.pending }} title="Pending">
+          <span
+            style={{ color: TICKET_STATUS_CHART.pending }}
+            title="In progress"
+          >
             ● {pending}
           </span>
           <span
             style={{ color: TICKET_STATUS_CHART.unassigned }}
-            title="Unassigned"
+            title="Received"
           >
             ● {unassigned}
           </span>

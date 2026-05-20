@@ -1,5 +1,11 @@
 import { TICKET_STATUS_CHART } from "../constants/ticketStatusTheme.js";
 
+// Demo-mode mock data for the Admin (Organization) dashboard.
+//
+// Shapes here are intentionally aligned with the response payloads of the
+// backend admin endpoints (see backend/routes/admin.py) so that the
+// frontend can be flipped from mock to real API with minimal changes.
+
 export const adminDashboardData = {
   summaryCards: [
     {
@@ -8,13 +14,6 @@ export const adminDashboardData = {
       title: "Total Tickets",
       value: 237,
       trend: [45, 48, 52, 42, 57, 46],
-    },
-    {
-      id: "openMine",
-      change: "-08.7%",
-      title: "Total Mine",
-      value: 162,
-      trend: [55, 54, 53, 40, 58, 42],
     },
   ],
 
@@ -65,13 +64,13 @@ export const adminDashboardData = {
   ],
   statusBreakdown: [
     {
-      label: "Pending",
+      label: "In progress",
       value: 40,
       color: TICKET_STATUS_CHART.pending,
       labelColor: TICKET_STATUS_CHART.pending,
     },
     {
-      label: "Unassigned",
+      label: "Received",
       value: 30,
       color: TICKET_STATUS_CHART.unassigned,
       labelColor: TICKET_STATUS_CHART.unassigned,
@@ -91,6 +90,8 @@ export const adminDashboardData = {
       subtitle: "This Week",
       bgFrom: "#F4FDF8",
       bgTo: "#CFF7E6",
+      change: "-12.4%",
+      isImprovement: true,
     },
     {
       id: "avgResponse",
@@ -99,15 +100,37 @@ export const adminDashboardData = {
       subtitle: "This Week",
       bgFrom: "#FAFCFF",
       bgTo: "#D8E8FD",
+      change: "-8.1%",
+      isImprovement: true,
+    },
+    {
+      id: "fcr",
+      title: "First Contact Resolution",
+      value: "64%",
+      subtitle: "This Week",
+      bgFrom: "#FFFDF5",
+      bgTo: "#FCE8B2",
+      change: "+5.3%",
+      isImprovement: true,
+    },
+    {
+      id: "escalation",
+      title: "Escalation Rate",
+      value: "11%",
+      subtitle: "This Week",
+      bgFrom: "#FFF5F5",
+      bgTo: "#FBD5D5",
+      change: "-3.2%",
+      isImprovement: true,
     },
   ],
   satisfaction: {
-    totalReceived: 753,
-    greatPercent: 89,
+    totalReceived: 612,
+    greatPercent: 91,
     breakdown: [
-      { label: "Happy", value: 96, color: "#60A5FA" },
-      { label: "Good", value: 92, color: "#FCD34D" },
-      { label: "Sad", value: 6, color: "#CBD5E1" },
+      { label: "Happy", value: 64, color: "#34D399" },
+      { label: "Good", value: 27, color: "#FBBF24" },
+      { label: "Sad", value: 9, color: "#F87171" },
     ],
   },
   solvedTicketsByDepartment: [
@@ -167,5 +190,18 @@ export const adminDashboardData = {
     { week: "W6", incoming: 58, resolved: 55 },
     { week: "W7", incoming: 45, resolved: 43 },
     { week: "W8", incoming: 51, resolved: 49 },
+  ],
+  teamWorkload: [
+    { team: "L1 Support", open: 14, resolved: 32 },
+    { team: "L2 Technical", open: 21, resolved: 24 },
+    { team: "L3 Engineering", open: 11, resolved: 16 },
+    { team: "Product", open: 8, resolved: 12 },
+    { team: "Legal", open: 4, resolved: 5 },
+  ],
+  ticketTypeBreakdown: [
+    { type: "Bug", value: 87, color: "#EF4444" },
+    { type: "Feature", value: 54, color: "#3B82F6" },
+    { type: "Question", value: 43, color: "#A78BFA" },
+    { type: "Other", value: 25, color: "#9CA3AF" },
   ],
 };
