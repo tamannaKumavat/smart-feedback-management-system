@@ -24,13 +24,15 @@ export default function PortalLayout({ mode, children }) {
   }
 
   return (
-    <div className="min-h-screen w-full bg-surface-page">
-      <Topbar mode={mode} />
-      <div className="grid grid-cols-1 items-stretch rounded-[16px] md:grid-cols-[200px_minmax(0,1fr)]">
-        <Sidebar mode={mode} onLogout={handleLogout} />
-        <main className="min-h-0 min-w-0 overflow-x-hidden rounded-lg bg-surface-muted px-4 py-4 shadow-card sm:px-6 sm:py-4">
-          {children}
-        </main>
+    <div className="admin-portal min-h-screen w-full">
+      <div className="admin-shell flex flex-col">
+        <Topbar mode={mode} />
+        <div className="admin-layout-grid grid grid-cols-1 items-stretch md:grid-cols-[200px_minmax(0,1fr)]">
+          <Sidebar mode={mode} onLogout={handleLogout} />
+          <main className="admin-main-panel min-h-0 min-w-0 overflow-x-hidden px-4 py-4 sm:px-6 sm:py-4">
+            {children}
+          </main>
+        </div>
       </div>
     </div>
   );

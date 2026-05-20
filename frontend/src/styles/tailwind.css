@@ -1024,4 +1024,197 @@
     background: var(--client-badge-resolved-bg);
     color: var(--client-badge-resolved-fg);
   }
+
+  /* —— Admin portal (Organization view) ——
+     Mirrors the client portal's light theme so the admin dashboard,
+     Customers and Activity Log pages share a consistent visual
+     language with the default-user side. Scoped strictly under the
+     .admin-portal class so no client/auth/global styling is affected. */
+  .admin-portal {
+    --color-surface-page: #edf1f7;
+    --color-surface-card: #ffffff;
+    --color-surface-muted: #f6f8fc;
+    --color-border-subtle: rgb(148 163 184 / 0.16);
+    --color-border-input: rgb(148 163 184 / 0.28);
+    --admin-shadow-xs: 0 1px 2px rgb(15 23 42 / 0.03);
+    --admin-shadow-sm:
+      0 1px 2px rgb(15 23 42 / 0.04), 0 4px 12px -4px rgb(15 23 42 / 0.06);
+    --admin-shadow-md:
+      0 2px 4px rgb(15 23 42 / 0.03), 0 8px 24px -6px rgb(15 23 42 / 0.09),
+      0 0 0 1px rgb(255 255 255 / 0.65) inset;
+    --admin-shadow-lg:
+      0 4px 8px rgb(15 23 42 / 0.04), 0 16px 40px -12px rgb(15 23 42 / 0.12),
+      0 0 0 1px rgb(255 255 255 / 0.7) inset;
+    --shadow-card: var(--admin-shadow-md);
+    --shadow-card-soft: var(--admin-shadow-sm);
+    background: linear-gradient(160deg, #e8edf5 0%, #f0f4fa 42%, #f8fafc 100%);
+    min-height: 100dvh;
+  }
+
+  .admin-portal .admin-shell {
+    gap: 0.5rem;
+    padding: 0 0.75rem 0.5rem;
+  }
+
+  .admin-portal .admin-layout-grid {
+    gap: 0.75rem;
+    padding: 0 0.75rem;
+  }
+
+  @media (min-width: 640px) {
+    .admin-portal .admin-shell {
+      gap: 0.625rem;
+      padding: 0 1rem 0.625rem;
+    }
+    .admin-portal .admin-layout-grid {
+      gap: 1rem;
+      padding: 0 1rem;
+    }
+  }
+
+  .admin-portal .admin-topbar {
+    border: 1px solid rgb(148 163 184 / 0.1);
+    border-radius: 1rem;
+    margin: 0.75rem 0.75rem 0;
+    background: rgb(255 255 255 / 0.82);
+    backdrop-filter: blur(14px) saturate(1.2);
+    box-shadow:
+      var(--admin-shadow-sm),
+      0 1px 0 rgb(255 255 255 / 0.95) inset;
+  }
+
+  @media (min-width: 640px) {
+    .admin-portal .admin-topbar {
+      margin: 1rem 1rem 0;
+    }
+  }
+
+  .admin-portal .admin-sidebar {
+    background: rgb(255 255 255 / 0.55);
+    border: none;
+    border-radius: 1rem;
+    box-shadow: var(--admin-shadow-sm);
+    backdrop-filter: blur(12px);
+  }
+
+  .admin-portal .admin-main-panel {
+    background: linear-gradient(180deg, #ffffff 0%, #fafbfd 100%);
+    border: 1px solid rgb(148 163 184 / 0.1);
+    border-radius: 1.125rem;
+    box-shadow: var(--admin-shadow-lg);
+  }
+
+  .admin-portal .admin-card {
+    @apply rounded-2xl border border-border-subtle bg-surface-card;
+    box-shadow: var(--admin-shadow-sm);
+    transition:
+      box-shadow 0.22s ease,
+      transform 0.22s ease;
+  }
+
+  .admin-portal .admin-card:hover {
+    box-shadow: var(--admin-shadow-md);
+  }
+
+  .admin-portal .admin-nav-link {
+    border-radius: 0.625rem;
+    border: 1px solid transparent;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease,
+      box-shadow 0.2s ease,
+      border-color 0.2s ease;
+  }
+
+  .admin-portal .admin-nav-link:hover {
+    background: rgb(255 255 255 / 0.7);
+    box-shadow: var(--admin-shadow-xs);
+  }
+
+  .admin-portal .admin-nav-link--active {
+    border-color: rgb(227 6 19 / 0.12);
+    background: rgb(255 255 255 / 0.92);
+    box-shadow: var(--admin-shadow-sm);
+  }
+
+  .admin-portal .admin-nav-icon {
+    border: 1px solid rgb(148 163 184 / 0.16);
+    box-shadow: var(--admin-shadow-xs);
+  }
+
+  .admin-portal .admin-logout {
+    border-radius: 0.625rem;
+    box-shadow: var(--admin-shadow-xs);
+    transition:
+      box-shadow 0.2s ease,
+      background-color 0.2s ease;
+  }
+
+  .admin-portal .admin-logout:hover {
+    box-shadow: var(--admin-shadow-sm);
+  }
+
+  .admin-portal .admin-page-title {
+    @apply text-[20px] font-semibold leading-tight text-dashboard-heading;
+  }
+
+  .admin-portal .admin-page-subtitle {
+    @apply mt-1 text-[13px] text-content-muted;
+  }
+
+  .admin-portal .admin-badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium;
+    background: rgb(241 245 249 / 0.9);
+    color: #475569;
+  }
+
+  .admin-portal .admin-badge--success {
+    background: #dcfce7;
+    color: #15803d;
+  }
+
+  .admin-portal .admin-badge--warning {
+    background: #fef3c7;
+    color: #92400e;
+  }
+
+  .admin-portal .admin-badge--info {
+    background: #dbeafe;
+    color: #1d4ed8;
+  }
+
+  .admin-portal .admin-badge--danger {
+    background: #fee2e2;
+    color: #b91c1c;
+  }
+
+  .admin-portal .admin-badge--neutral {
+    background: #f1f5f9;
+    color: #475569;
+  }
+
+  .admin-portal .admin-search-field {
+    @apply flex h-10 w-full items-center gap-2 rounded-xl border bg-white px-3 text-[13px] text-content;
+    border-color: rgb(148 163 184 / 0.22);
+    box-shadow: var(--admin-shadow-xs);
+    transition:
+      border-color 0.2s ease,
+      box-shadow 0.2s ease;
+  }
+
+  .admin-portal .admin-search-field:focus-within {
+    border-color: rgb(148 163 184 / 0.45);
+    box-shadow:
+      0 0 0 3px rgb(148 163 184 / 0.12),
+      var(--admin-shadow-xs);
+  }
+
+  .admin-portal .admin-table-shell {
+    @apply overflow-hidden rounded-2xl border border-border-subtle bg-white;
+    box-shadow: var(--admin-shadow-sm);
+  }
+
+  .admin-portal .admin-row-hover {
+    @apply transition hover:bg-surface-muted;
+  }
 }

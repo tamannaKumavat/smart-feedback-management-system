@@ -44,6 +44,30 @@ ALLOWED_UPLOAD_MIME_PREFIXES = (
     "text/",
 )
 
+# --- Executive Report Agent (Part 2) ----------------------------------------
+# Weekly cron schedule (UTC). Default: Monday 09:00 UTC.
+EXECUTIVE_REPORT_DAY_OF_WEEK = int(os.getenv("EXECUTIVE_REPORT_DAY_OF_WEEK", "0"))  # Mon=0
+EXECUTIVE_REPORT_HOUR_UTC = int(os.getenv("EXECUTIVE_REPORT_HOUR_UTC", "9"))
+EXECUTIVE_REPORT_ENABLE_SCHEDULER = (
+    os.getenv("EXECUTIVE_REPORT_ENABLE_SCHEDULER", "true").lower() == "true"
+)
+EXECUTIVE_REPORT_FROM = os.getenv(
+    "EXECUTIVE_REPORT_FROM", "Smart Feedback System <no-reply@ruag.local>"
+)
+EXECUTIVE_REPORT_DASHBOARD_URL = os.getenv(
+    "EXECUTIVE_REPORT_DASHBOARD_URL", "http://localhost:5173/admin/dashboard"
+)
+EXECUTIVE_REPORT_SUBJECT = os.getenv(
+    "EXECUTIVE_REPORT_SUBJECT", "Smart Feedback System — Weekly Executive Summary"
+)
+# SMTP transport. If host is empty, the agent falls back to writing each
+# rendered HTML email to disk (useful for the demo without real SMTP).
+SMTP_HOST = os.getenv("SMTP_HOST", "")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
+
 # Supabase Storage (private bucket + signed URLs).
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")

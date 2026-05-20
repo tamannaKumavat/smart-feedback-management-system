@@ -70,7 +70,7 @@ export default function Topbar({
       className={`sticky top-0 z-20 backdrop-blur ${
         isClient
           ? `client-topbar ${isDark ? "border-b border-border-subtle bg-surface-card/95" : "border-0"}`
-          : "border-b border-transparent bg-white"
+          : "admin-topbar"
       }`}
     >
       <div className="mx-auto flex h-16 items-center justify-between gap-2 px-4 sm:gap-4 sm:px-6">
