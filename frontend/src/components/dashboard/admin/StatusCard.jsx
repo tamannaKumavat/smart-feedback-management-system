@@ -20,7 +20,7 @@ export default function StatusCard({ list, total }) {
           Total tickets by status
         </h3>
         <span className="shrink-0 text-[11px] font-medium text-[#94A3B8] sm:text-[12px]">
-          All agents ▾
+          All teams ▾
         </span>
       </div>
 
