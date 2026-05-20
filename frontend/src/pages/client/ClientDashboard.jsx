@@ -1,7 +1,8 @@
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import ClientStats from "../../components/dashboard/client/ClientStats.jsx";
 import ProjectHistoryTable from "../../components/dashboard/client/ProjectHistoryTable.jsx";
+import ProjectHistoryTableSkeleton from "../../components/dashboard/client/ProjectHistoryTableSkeleton.jsx";
 import PortalLayout from "../../layouts/PortalLayout.jsx";
 import { listMyIssues } from "../../lib/chatApi.js";
 import { fadeInUp } from "../../lib/motion.js";
@@ -140,13 +141,30 @@ export default function ClientDashboard() {
         <ClientStats stats={stats} />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {loading ? (
-            <div className="flex flex-1 items-center justify-center text-[13px] text-content-muted">
-              Loading issues...
-            </div>
-          ) : (
-            <ProjectHistoryTable title="My Issues" rows={rows} />
-          )}
+          <AnimatePresence mode="wait">
+            {loading ? (
+              <motion.div
+                key="issues-skeleton"
+                className="flex min-h-0 min-w-0 flex-1 flex-col"
+                initial={fadeInUp.initial}
+                animate={fadeInUp.animate}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.2 }}
+              >
+                <ProjectHistoryTableSkeleton title="My Issues" />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="issues-table"
+                className="flex min-h-0 min-w-0 flex-1 flex-col"
+                initial={fadeInUp.initial}
+                animate={fadeInUp.animate}
+                transition={fadeInUp.transition}
+              >
+                <ProjectHistoryTable title="My Issues" rows={rows} />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </section>
     </PortalLayout>
