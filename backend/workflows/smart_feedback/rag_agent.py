@@ -221,7 +221,8 @@ class RAGAgent:
         sql_tickets = text(f"""
             SELECT
                 summary            AS question_text,
-                recommended_action AS answer_text,
+                response          AS answer_text,
+                recommended_action,
                 'ticket'           AS source_type,
                 NULL               AS doc_id,
                 NULL               AS doc_version,
@@ -234,8 +235,8 @@ class RAGAgent:
                 0.6                AS score,
                 'keyword'          AS matched_on
             FROM tickets
-            WHERE recommended_action IS NOT NULL
-              AND status = 'Resolved'
+            WHERE response IS NOT NULL
+              AND status IN ('Resolved', 'Done')
               AND ({ticket_like_clauses})
             LIMIT :top_k
         """)
