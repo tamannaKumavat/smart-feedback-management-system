@@ -1,5 +1,12 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useMemo, useState } from "react";
+import {
+  localizeTableProp,
+  TABLE_LABEL_ALIASES,
+  TABLE_TITLE_ALIASES,
+  TIMELINE_DETAIL_ALIASES,
+} from "@/i18n/clientDashboard.js";
+import { useTranslation } from "@/i18n/useTranslation.js";
 import { expandCollapse, fadeInUp } from "../../../lib/motion.js";
 import {
   FiCheck,
@@ -14,37 +21,59 @@ import {
 import Dropdown from "../../Dropdown.jsx";
 import ChatHistoryModal from "./ChatHistoryModal.jsx";
 
-const PHASE_DEFS = [
-  { key: "created", label: "Created", Icon: FiEdit3 },
-  { key: "classified", label: "Classified", Icon: FiLayers },
-  { key: "inProgress", label: "In Progress", Icon: FiZap },
-  { key: "resolved", label: "Resolved", Icon: FiCheck },
-];
-
-const PHASE_ROW_STATUS = {
-  created: { label: "Created", badgeClass: "client-phase-badge--created" },
-  classified: {
-    label: "Classified",
-    badgeClass: "client-phase-badge--classified",
-  },
-  inProgress: {
-    label: "In Progress",
-    badgeClass: "client-phase-badge--inProgress",
-  },
-  resolved: { label: "Resolved", badgeClass: "client-phase-badge--resolved" },
+const PHASE_ICONS = {
+  created: FiEdit3,
+  classified: FiLayers,
+  inProgress: FiZap,
+  resolved: FiCheck,
 };
 
-const FILTER_OPTIONS = [
-  { value: "all", label: "All statuses" },
-  { value: "created", label: "Created" },
-  { value: "classified", label: "Classified" },
-  { value: "inProgress", label: "In Progress" },
-  { value: "resolved", label: "Resolved" },
-];
+const PHASE_BADGE_CLASS = {
+  created: "client-phase-badge--created",
+  classified: "client-phase-badge--classified",
+  inProgress: "client-phase-badge--inProgress",
+  resolved: "client-phase-badge--resolved",
+};
 
-function phaseRowStatus(phase) {
-  const key = phase ?? "created";
-  return PHASE_ROW_STATUS[key] ?? PHASE_ROW_STATUS.created;
+const PHASE_KEYS = ["created", "classified", "inProgress", "resolved"];
+
+function usePhaseDefs(t) {
+  return useMemo(
+    () =>
+      PHASE_KEYS.map((key) => ({
+        key,
+        label: t(`historyTable.phases.${key}`),
+        Icon: PHASE_ICONS[key],
+      })),
+    [t],
+  );
+}
+
+function useFilterOptions(t) {
+  return useMemo(
+    () => [
+      { value: "all", label: t("historyTable.allStatuses") },
+      ...PHASE_KEYS.map((key) => ({
+        value: key,
+        label: t(`historyTable.phases.${key}`),
+      })),
+    ],
+    [t],
+  );
+}
+
+function phaseRowStatus(phase, t) {
+  const key = PHASE_KEYS.includes(phase) ? phase : "created";
+  return {
+    label: t(`historyTable.phases.${key}`),
+    badgeClass: PHASE_BADGE_CLASS[key] ?? PHASE_BADGE_CLASS.created,
+  };
+}
+
+function translateTimelineDetail(t, detail) {
+  if (!detail) return t("common.dash");
+  const key = TIMELINE_DETAIL_ALIASES[detail];
+  return key ? t(key) : detail;
 }
 
 const TEAM_AVATAR = "/ruag-single.png";
@@ -53,8 +82,8 @@ const ROW_DATE_W = "w-[5.75rem] shrink-0 sm:w-32";
 const ROW_RIGHT_GRID =
   "grid min-h-0 min-w-0 max-w-full flex-[0_1_20rem] grid-cols-2 gap-x-2 [grid-template-columns:minmax(0,1fr)_minmax(0,1fr)] sm:max-w-[20rem] sm:gap-x-4";
 
-function phaseIndex(phase) {
-  const i = PHASE_DEFS.findIndex((p) => p.key === phase);
+function phaseIndex(phase, phaseDefs) {
+  const i = phaseDefs.findIndex((p) => p.key === phase);
   return i >= 0 ? i : 0;
 }
 
@@ -143,19 +172,19 @@ function teamResponseFromRow(row) {
   };
 }
 
-function TeamAvatar() {
+function TeamAvatar({ t }) {
   return (
     <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-border-subtle bg-surface-card shadow-sm sm:h-10 sm:w-10">
       <img
         src={TEAM_AVATAR}
-        alt="Ruag Team"
+        alt={t("common.ruagTeam")}
         className="h-full w-full object-cover"
       />
     </div>
   );
 }
 
-function RuagTeamResponse({ row }) {
+function RuagTeamResponse({ row, t }) {
   const reply = teamResponseFromRow(row);
   if (!reply) return null;
 
@@ -165,7 +194,7 @@ function RuagTeamResponse({ row }) {
   return (
     <section
       className="client-team-response rounded-xl border border-[var(--client-accent)]/25 bg-surface-card p-4 shadow-sm sm:p-5"
-      aria-label="Response from Ruag team"
+      aria-label={t("historyTable.teamResponseAria")}
     >
       <div className="flex items-center gap-2 border-b border-border-subtle pb-3">
         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--client-accent)]/10 text-[var(--client-accent)]">
@@ -173,10 +202,10 @@ function RuagTeamResponse({ row }) {
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-content-muted">
-            Team response
+            {t("historyTable.teamResponse")}
           </p>
           <p className="text-[12px] text-content-muted sm:text-[13px]">
-            Update from the Ruag support team
+            {t("historyTable.teamResponseSubtitle")}
           </p>
         </div>
       </div>
@@ -185,7 +214,7 @@ function RuagTeamResponse({ row }) {
         <article className="flex min-w-0 max-w-full flex-col items-start gap-1.5">
           <p className="text-[12px] leading-none">
             <span className="font-semibold text-dashboard-heading">
-              Ruag Team
+              {t("common.ruagTeam")}
             </span>
 
             {timeLabel ? (
@@ -193,7 +222,7 @@ function RuagTeamResponse({ row }) {
             ) : null}
           </p>
           <div className="flex max-w-full items-end gap-2.5">
-            <TeamAvatar />
+            <TeamAvatar t={t} />
             <div className="client-chat-bubble-team min-w-0 max-w-[min(100%,36rem)] rounded-2xl rounded-bl-md px-4 py-3 text-[13px] leading-relaxed shadow-sm sm:text-[14px]">
               <p className="whitespace-pre-wrap">{reply.text}</p>
             </div>
@@ -204,18 +233,18 @@ function RuagTeamResponse({ row }) {
   );
 }
 
-function TicketTimeline({ phase, timeline = {} }) {
-  const active = phaseIndex(phase);
-  const segmentCount = PHASE_DEFS.length - 1;
+function TicketTimeline({ phase, timeline = {}, phaseDefs, t }) {
+  const active = phaseIndex(phase, phaseDefs);
+  const segmentCount = phaseDefs.length - 1;
 
   return (
     <div className="client-ticket-timeline min-w-0 rounded-lg px-2 py-2 sm:px-3 sm:py-2.5">
       <p className="client-timeline-heading text-[9px] font-semibold uppercase tracking-wide sm:text-[10px]">
-        Ticket history
+        {t("historyTable.ticketHistory")}
       </p>
 
       <div className="mt-1.5 grid grid-cols-4 gap-x-1 gap-y-0 text-center">
-        {PHASE_DEFS.map((step) => {
+        {phaseDefs.map((step) => {
           const entry = timeline[step.key];
           return (
             <span
@@ -245,7 +274,7 @@ function TicketTimeline({ phase, timeline = {} }) {
           ))}
         </div>
         <div className="relative z-[1] flex w-full justify-between gap-1">
-          {PHASE_DEFS.map((step, i) => (
+          {phaseDefs.map((step, i) => (
             <div
               key={step.key}
               className="flex min-w-0 flex-1 flex-col items-center"
@@ -257,7 +286,7 @@ function TicketTimeline({ phase, timeline = {} }) {
       </div>
 
       <div className="mt-1.5 grid grid-cols-4 gap-x-1 text-center">
-        {PHASE_DEFS.map((step) => (
+        {phaseDefs.map((step) => (
           <p
             key={`${step.key}-label`}
             className="client-timeline-title text-[8px] font-bold leading-tight sm:text-[9px]"
@@ -268,14 +297,14 @@ function TicketTimeline({ phase, timeline = {} }) {
       </div>
 
       <div className="mt-0.5 grid grid-cols-4 gap-x-1 text-center">
-        {PHASE_DEFS.map((step) => {
+        {phaseDefs.map((step) => {
           const entry = timeline[step.key];
           return (
             <p
               key={`${step.key}-detail`}
               className="client-timeline-muted line-clamp-2 min-h-[1.5rem] px-0.5 text-[7px] leading-snug sm:min-h-[1.625rem] sm:text-[8px]"
             >
-              {entry?.detail ?? "—"}
+              {translateTimelineDetail(t, entry?.detail)}
             </p>
           );
         })}
@@ -294,6 +323,32 @@ export default function ProjectHistoryTable({
   actionLabel = "View history",
   searchPlaceholder = "Search tickets...",
 }) {
+  const { t } = useTranslation();
+  const phaseDefs = usePhaseDefs(t);
+  const filterOptions = useFilterOptions(t);
+  const localizedTitle = localizeTableProp(t, title, TABLE_TITLE_ALIASES);
+  const localizedDateLabel = localizeTableProp(t, dateLabel, TABLE_LABEL_ALIASES);
+  const localizedFeedbackLabel = localizeTableProp(
+    t,
+    feedbackLabel,
+    TABLE_LABEL_ALIASES,
+  );
+  const localizedStatusLabel = localizeTableProp(
+    t,
+    statusLabel,
+    TABLE_LABEL_ALIASES,
+  );
+  const localizedActionLabel = localizeTableProp(
+    t,
+    actionLabel,
+    TABLE_LABEL_ALIASES,
+  );
+  const localizedSearchPlaceholder = localizeTableProp(
+    t,
+    searchPlaceholder,
+    TABLE_LABEL_ALIASES,
+  );
+
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [expandedId, setExpandedId] = useState(null);
@@ -307,12 +362,12 @@ export default function ProjectHistoryTable({
       const phase = row.timelinePhase ?? "created";
       if (statusFilter !== "all" && phase !== statusFilter) return false;
       if (!q) return true;
-      const phaseLabel = phaseRowStatus(phase).label;
+      const phaseLabel = phaseRowStatus(phase, t).label;
       const hay =
         `${title} ${description} ${row.date ?? ""} ${phaseLabel} ${row.id ?? index}`.toLowerCase();
       return hay.includes(q);
     });
-  }, [rows, query, statusFilter]);
+  }, [rows, query, statusFilter, t]);
 
   function toggleRow(row, id) {
     const next = expandedId === id ? null : id;
@@ -327,10 +382,10 @@ export default function ProjectHistoryTable({
       animate={fadeInUp.animate}
       transition={{ ...fadeInUp.transition, delay: 0.08 }}
     >
-      {title ? (
+      {localizedTitle ? (
         <div className="client-separator flex min-w-0 shrink-0 flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-4 sm:py-3.5">
           <h2 className="min-w-0 shrink-0 text-[15px] font-bold leading-tight text-dashboard-heading sm:text-[16px] lg:text-[17px]">
-            {title}
+            {localizedTitle}
           </h2>
           <div className="flex w-full min-w-0 flex-col gap-2 sm:max-w-[min(100%,32rem)] sm:flex-1 sm:flex-row sm:items-center sm:justify-end sm:gap-3">
             <label className="client-search-field flex h-10 min-w-0 w-full items-center gap-2.5 rounded-xl border border-border-input bg-surface-card px-3 shadow-sm sm:min-w-0 sm:flex-1 sm:basis-0">
@@ -342,21 +397,21 @@ export default function ProjectHistoryTable({
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder={searchPlaceholder}
+                placeholder={localizedSearchPlaceholder}
                 className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[12px] text-content placeholder:text-content-muted focus:outline-none focus:ring-0 sm:text-[13px]"
-                aria-label="Search tickets"
+                aria-label={t("historyTable.searchTicketsAria")}
               />
             </label>
             <div className="min-w-0 w-full sm:flex-1 sm:basis-0">
               <label htmlFor="ticket-status-filter" className="sr-only">
-                Filter by status
+                {t("historyTable.filterByStatus")}
               </label>
               <Dropdown
                 id="ticket-status-filter"
-                options={FILTER_OPTIONS}
+                options={filterOptions}
                 value={statusFilter}
                 onChange={setStatusFilter}
-                aria-label="Filter by status"
+                aria-label={t("historyTable.filterByStatus")}
                 labelClassName="text-[var(--client-accent)] font-medium"
                 chevronClassName="text-[var(--client-accent)]"
                 menuClassName="!mt-1.5 !rounded-xl !border-border-subtle !bg-surface-card !py-1.5"
@@ -372,19 +427,21 @@ export default function ProjectHistoryTable({
 
       <div className="client-separator flex min-w-0 shrink-0 items-center gap-2 bg-surface-muted px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-content-muted sm:gap-4 sm:px-4 sm:py-2.5 sm:text-[12px]">
         <span className={`${ROW_DATE_W} flex min-h-[1.25rem] items-center`}>
-          {dateLabel}
+          {localizedDateLabel}
         </span>
-        <span className="min-h-[1.25rem] min-w-0 flex-1">{feedbackLabel}</span>
+        <span className="min-h-[1.25rem] min-w-0 flex-1">
+          {localizedFeedbackLabel}
+        </span>
         <div className={`${ROW_RIGHT_GRID} min-h-[1.25rem] items-center`}>
-          <span className="flex justify-end text-right">{statusLabel}</span>
-          <span className="flex justify-end text-right">{actionLabel}</span>
+          <span className="flex justify-end text-right">{localizedStatusLabel}</span>
+          <span className="flex justify-end text-right">{localizedActionLabel}</span>
         </div>
       </div>
 
       <div className="client-divide min-h-0 flex-1 divide-y overflow-y-auto overscroll-contain">
         {filteredRows.length === 0 ? (
           <p className="px-4 py-8 text-center text-[13px] text-content-muted">
-            No tickets match your filters.
+            {t("historyTable.noTicketsMatch")}
           </p>
         ) : (
           filteredRows.map((row, index) => {
@@ -397,7 +454,7 @@ export default function ProjectHistoryTable({
             const showShot = Boolean(row.hasScreenshot);
             const hasTeamResponse = Boolean(teamResponseFromRow(row));
             const { label: phaseLabel, badgeClass: phaseBadgeClass } =
-              phaseRowStatus(phase);
+              phaseRowStatus(phase, t);
 
             return (
               <div key={rowId} className="bg-surface-card">
@@ -434,11 +491,11 @@ export default function ProjectHistoryTable({
                           className={`shrink-0 text-[14px] text-content-muted transition-transform sm:text-[16px] ${open ? "rotate-180" : ""}`}
                           aria-hidden
                         />
-                        <span className="truncate">{actionLabel}</span>
+                        <span className="truncate">{localizedActionLabel}</span>
                         {hasTeamResponse ? (
                           <span
                             className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-[var(--client-accent)] ring-2 ring-surface-card"
-                            title="Team response available"
+                            title={t("historyTable.teamResponseAvailable")}
                             aria-hidden
                           />
                         ) : null}
@@ -460,13 +517,13 @@ export default function ProjectHistoryTable({
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-5">
                           <img
                             src="/ticket-dummy.png"
-                            alt="Ticket attachment screenshot"
+                            alt={t("historyTable.screenshotAlt")}
                             className="h-16 w-16 shrink-0 rounded-md border border-border-subtle bg-surface-card object-contain shadow-sm sm:h-20 sm:w-20"
                             loading="lazy"
                           />
                           <div className="min-w-0 flex-1">
                             <p className="text-[11px] font-semibold uppercase tracking-wide text-content-muted">
-                              Description
+                              {t("common.description")}
                             </p>
                             <p className="mt-1.5 text-[13px] leading-relaxed text-content sm:text-[14px]">
                               {detail}
@@ -476,15 +533,20 @@ export default function ProjectHistoryTable({
                       ) : (
                         <div>
                           <p className="text-[11px] font-semibold uppercase tracking-wide text-content-muted">
-                            Description
+                            {t("common.description")}
                           </p>
                           <p className="mt-1.5 text-[13px] leading-relaxed text-content sm:text-[14px]">
                             {detail}
                           </p>
                         </div>
                       )}
-                      <RuagTeamResponse row={row} />
-                      <TicketTimeline phase={phase} timeline={timeline} />
+                      <RuagTeamResponse row={row} t={t} />
+                      <TicketTimeline
+                        phase={phase}
+                        timeline={timeline}
+                        phaseDefs={phaseDefs}
+                        t={t}
+                      />
                       {row.id ? (
                         <div className="flex justify-end pt-1">
                           <button
@@ -498,7 +560,7 @@ export default function ProjectHistoryTable({
                             }}
                             className="client-btn-secondary"
                           >
-                            See chat history
+                            {t("historyTable.seeChatHistory")}
                           </button>
                         </div>
                       ) : null}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { FiX } from "react-icons/fi";
 import MarkdownMessage from "../../MarkdownMessage.jsx";
+import { useTranslation } from "@/i18n/useTranslation.js";
 import { getMessages } from "../../../lib/chatApi.js";
 import { showError } from "../../../lib/toast.js";
 
@@ -43,7 +44,7 @@ function Avatar({ src, label }) {
   );
 }
 
-function HistoryMessage({ msg }) {
+function HistoryMessage({ msg, t }) {
   const isUser = msg.sender === "user";
   const time = formatTime(msg.createdAt);
 
@@ -64,7 +65,7 @@ function HistoryMessage({ msg }) {
           }`}
         >
           <span className="font-semibold text-dashboard-heading">
-            {isUser ? "You" : "Ruag Team"}
+            {isUser ? t("common.you") : t("common.ruagTeam")}
           </span>
           {time ? <span className="text-content-muted"> · {time}</span> : null}
         </p>
@@ -75,7 +76,7 @@ function HistoryMessage({ msg }) {
         >
           <Avatar
             src={isUser ? userAvatar : teamAvatar}
-            label={isUser ? "You" : "Ruag Team"}
+            label={isUser ? t("common.you") : t("common.ruagTeam")}
           />
           <div
             className={`min-w-0 max-w-full ${isUser ? bubbleUser : bubbleTeam}`}
@@ -93,6 +94,7 @@ function HistoryMessage({ msg }) {
 }
 
 export default function ChatHistoryModal({ open, issueId, issueTitle, onClose }) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState([]);
 
@@ -110,7 +112,7 @@ export default function ChatHistoryModal({ open, issueId, issueTitle, onClose })
         if (!cancelled) setMessages(data.messages || []);
       } catch (err) {
         if (!cancelled) {
-          showError(err, "Could not load chat history");
+          showError(err, t("chatHistory.loadError"));
           onClose?.();
         }
       } finally {
@@ -144,7 +146,7 @@ export default function ChatHistoryModal({ open, issueId, issueTitle, onClose })
       <button
         type="button"
         className="absolute inset-0 bg-slate-950/60 backdrop-blur-[3px]"
-        aria-label="Close chat history"
+        aria-label={t("chatHistory.closeOverlay")}
         onClick={onClose}
       />
       <div className="relative z-10 flex max-h-[min(88dvh,720px)] w-full max-w-[640px] flex-col overflow-hidden rounded-2xl border border-border-subtle bg-surface-card shadow-card">
@@ -154,7 +156,7 @@ export default function ChatHistoryModal({ open, issueId, issueTitle, onClose })
               id="chat-history-title"
               className="text-[16px] font-semibold text-dashboard-heading"
             >
-              Chat history
+              {t("chatHistory.title")}
             </h2>
             {issueTitle ? (
               <p className="mt-0.5 truncate text-[13px] text-content-muted">
@@ -166,7 +168,7 @@ export default function ChatHistoryModal({ open, issueId, issueTitle, onClose })
             type="button"
             onClick={onClose}
             className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-content-muted transition hover:bg-surface-muted hover:text-content"
-            aria-label="Close"
+            aria-label={t("common.close")}
           >
             <FiX className="text-[18px]" />
           </button>
@@ -178,16 +180,16 @@ export default function ChatHistoryModal({ open, issueId, issueTitle, onClose })
         >
           {loading ? (
             <p className="py-8 text-center text-[13px] text-content-muted">
-              Loading messages…
+              {t("chatHistory.loading")}
             </p>
           ) : messages.length === 0 ? (
             <p className="py-8 text-center text-[13px] text-content-muted">
-              No messages for this issue yet.
+              {t("chatHistory.empty")}
             </p>
           ) : (
             <div className="space-y-5">
               {messages.map((msg) => (
-                <HistoryMessage key={msg.id} msg={msg} />
+                <HistoryMessage key={msg.id} msg={msg} t={t} />
               ))}
             </div>
           )}
