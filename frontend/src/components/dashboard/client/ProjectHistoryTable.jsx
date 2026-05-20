@@ -7,6 +7,7 @@ import {
   FiCircle,
   FiEdit3,
   FiLayers,
+  FiMessageSquare,
   FiSearch,
   FiZap,
 } from "react-icons/fi";
@@ -45,6 +46,8 @@ function phaseRowStatus(phase) {
   const key = phase ?? "created";
   return PHASE_ROW_STATUS[key] ?? PHASE_ROW_STATUS.created;
 }
+
+const TEAM_AVATAR = "/ruag-single.png";
 
 const ROW_DATE_W = "w-[5.75rem] shrink-0 sm:w-32";
 const ROW_RIGHT_GRID =
@@ -95,6 +98,109 @@ function TimelineStepIcon({ step, i, active }) {
     >
       <FiCircle className="text-[11px] sm:text-[12px]" strokeWidth={2} />
     </div>
+  );
+}
+
+function formatResponseTime(iso) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+}
+
+function teamResponseFromRow(row) {
+  const text = String(row.response ?? "").trim();
+  if (text) {
+    const comments = Array.isArray(row.responseComments)
+      ? row.responseComments
+      : [];
+    const latest = comments.length ? comments[comments.length - 1] : null;
+    return {
+      text,
+      at: latest?.created ?? latest?.updated ?? null,
+      author: latest?.author?.display_name ?? null,
+    };
+  }
+
+  const comments = Array.isArray(row.responseComments)
+    ? row.responseComments
+    : [];
+  const withBody = comments.filter((c) => String(c?.body ?? "").trim());
+  if (!withBody.length) return null;
+  const latest = withBody[withBody.length - 1];
+  return {
+    text: String(latest.body).trim(),
+    at: latest.created ?? latest.updated ?? null,
+    author: latest.author?.display_name ?? null,
+  };
+}
+
+function TeamAvatar() {
+  return (
+    <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-border-subtle bg-surface-card shadow-sm sm:h-10 sm:w-10">
+      <img
+        src={TEAM_AVATAR}
+        alt="Ruag Team"
+        className="h-full w-full object-cover"
+      />
+    </div>
+  );
+}
+
+function RuagTeamResponse({ row }) {
+  const reply = teamResponseFromRow(row);
+  if (!reply) return null;
+
+  const timeLabel = formatResponseTime(reply.at);
+  const resolvedBy = String(row.resolvedBy ?? "").trim();
+
+  return (
+    <section
+      className="client-team-response rounded-xl border border-[var(--client-accent)]/25 bg-surface-card p-4 shadow-sm sm:p-5"
+      aria-label="Response from Ruag team"
+    >
+      <div className="flex items-center gap-2 border-b border-border-subtle pb-3">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--client-accent)]/10 text-[var(--client-accent)]">
+          <FiMessageSquare className="text-[15px]" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-content-muted">
+            Team response
+          </p>
+          <p className="text-[12px] text-content-muted sm:text-[13px]">
+            Update from the Ruag support team
+          </p>
+        </div>
+      </div>
+
+      <div className="client-chat-row client-chat-row--team mt-4 flex w-full">
+        <article className="flex min-w-0 max-w-full flex-col items-start gap-1.5">
+          <p className="text-[12px] leading-none">
+            <span className="font-semibold text-dashboard-heading">
+              Ruag Team
+            </span>
+
+            {timeLabel ? (
+              <span className="text-content-muted"> · {timeLabel}</span>
+            ) : null}
+          </p>
+          <div className="flex max-w-full items-end gap-2.5">
+            <TeamAvatar />
+            <div className="client-chat-bubble-team min-w-0 max-w-[min(100%,36rem)] rounded-2xl rounded-bl-md px-4 py-3 text-[13px] leading-relaxed shadow-sm sm:text-[14px]">
+              <p className="whitespace-pre-wrap">{reply.text}</p>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
   );
 }
 
@@ -196,13 +302,14 @@ export default function ProjectHistoryTable({
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((row, index) => {
-      const detail = row.ticket ?? row.feedback ?? "";
+      const title = row.ticket ?? row.feedback ?? "";
+      const description = row.description ?? title;
       const phase = row.timelinePhase ?? "created";
       if (statusFilter !== "all" && phase !== statusFilter) return false;
       if (!q) return true;
       const phaseLabel = phaseRowStatus(phase).label;
       const hay =
-        `${detail} ${row.date ?? ""} ${phaseLabel} ${row.id ?? index}`.toLowerCase();
+        `${title} ${description} ${row.date ?? ""} ${phaseLabel} ${row.id ?? index}`.toLowerCase();
       return hay.includes(q);
     });
   }, [rows, query, statusFilter]);
@@ -281,12 +388,14 @@ export default function ProjectHistoryTable({
           </p>
         ) : (
           filteredRows.map((row, index) => {
-            const detail = row.ticket ?? row.feedback;
+            const title = row.ticket ?? row.feedback ?? "";
+            const detail = row.description ?? title;
             const rowId = row.id ?? `${row.date}-${detail}-${index}`;
             const open = expandedId === rowId;
             const phase = row.timelinePhase ?? "created";
             const timeline = row.timeline ?? {};
             const showShot = Boolean(row.hasScreenshot);
+            const hasTeamResponse = Boolean(teamResponseFromRow(row));
             const { label: phaseLabel, badgeClass: phaseBadgeClass } =
               phaseRowStatus(phase);
 
@@ -305,9 +414,9 @@ export default function ProjectHistoryTable({
                   </span>
                   <span
                     className="flex min-h-0 min-w-0 flex-1 items-center text-[12px] font-medium leading-snug text-content sm:text-[13px]"
-                    title={detail}
+                    title={title}
                   >
-                    <span className="min-w-0 truncate">{detail}</span>
+                    <span className="min-w-0 truncate">{title}</span>
                   </span>
                   <div className={`${ROW_RIGHT_GRID} min-h-0 items-center`}>
                     <div className="flex min-w-0 justify-end ">
@@ -320,35 +429,52 @@ export default function ProjectHistoryTable({
                       </div>
                     </div>
                     <div className="flex min-w-0 justify-end">
-                      <span className="inline-flex max-w-full items-center gap-1 rounded-lg border border-border-subtle bg-surface-card px-2 py-1 text-[10px] font-semibold leading-tight text-content shadow-sm transition group-hover:border-[var(--client-accent)]/40 group-hover:bg-surface-muted sm:gap-1.5 sm:px-2.5 sm:py-1.5 sm:text-[11px]">
+                      <span className="relative inline-flex max-w-full items-center gap-1 rounded-lg border border-border-subtle bg-surface-card px-2 py-1 text-[10px] font-semibold leading-tight text-content shadow-sm transition group-hover:border-[var(--client-accent)]/40 group-hover:bg-surface-muted sm:gap-1.5 sm:px-2.5 sm:py-1.5 sm:text-[11px]">
                         <FiChevronDown
                           className={`shrink-0 text-[14px] text-content-muted transition-transform sm:text-[16px] ${open ? "rotate-180" : ""}`}
                           aria-hidden
                         />
                         <span className="truncate">{actionLabel}</span>
+                        {hasTeamResponse ? (
+                          <span
+                            className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-[var(--client-accent)] ring-2 ring-surface-card"
+                            title="Team response available"
+                            aria-hidden
+                          />
+                        ) : null}
                       </span>
                     </div>
                   </div>
                 </button>
                 <AnimatePresence initial={false}>
-                {open ? (
-                  <motion.div
-                    key="detail"
-                    className="min-w-0 space-y-3 overflow-x-hidden border-t border-border-subtle bg-surface-muted p-6 sm:space-y-4"
-                    initial={expandCollapse.initial}
-                    animate={expandCollapse.animate}
-                    exit={expandCollapse.exit}
-                    transition={expandCollapse.transition}
-                  >
-                    {showShot ? (
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-5">
-                        <img
-                          src="/ticket-dummy.png"
-                          alt="Ticket attachment screenshot"
-                          className="h-16 w-16 shrink-0 rounded-md border border-border-subtle bg-surface-card object-contain shadow-sm sm:h-20 sm:w-20"
-                          loading="lazy"
-                        />
-                        <div className="min-w-0 flex-1">
+                  {open ? (
+                    <motion.div
+                      key="detail"
+                      className="min-w-0 space-y-3 overflow-x-hidden border-t border-border-subtle bg-surface-muted p-6 sm:space-y-4"
+                      initial={expandCollapse.initial}
+                      animate={expandCollapse.animate}
+                      exit={expandCollapse.exit}
+                      transition={expandCollapse.transition}
+                    >
+                      {showShot ? (
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-5">
+                          <img
+                            src="/ticket-dummy.png"
+                            alt="Ticket attachment screenshot"
+                            className="h-16 w-16 shrink-0 rounded-md border border-border-subtle bg-surface-card object-contain shadow-sm sm:h-20 sm:w-20"
+                            loading="lazy"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-content-muted">
+                              Description
+                            </p>
+                            <p className="mt-1.5 text-[13px] leading-relaxed text-content sm:text-[14px]">
+                              {detail}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
                           <p className="text-[11px] font-semibold uppercase tracking-wide text-content-muted">
                             Description
                           </p>
@@ -356,37 +482,28 @@ export default function ProjectHistoryTable({
                             {detail}
                           </p>
                         </div>
-                      </div>
-                    ) : (
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-content-muted">
-                          Description
-                        </p>
-                        <p className="mt-1.5 text-[13px] leading-relaxed text-content sm:text-[14px]">
-                          {detail}
-                        </p>
-                      </div>
-                    )}
-                    <TicketTimeline phase={phase} timeline={timeline} />
-                    {row.id ? (
-                      <div className="flex justify-end pt-1">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setChatHistoryIssue({
-                              id: row.id,
-                              title: detail,
-                            });
-                          }}
-                          className="client-btn-secondary"
-                        >
-                          See chat history
-                        </button>
-                      </div>
-                    ) : null}
-                  </motion.div>
-                ) : null}
+                      )}
+                      <RuagTeamResponse row={row} />
+                      <TicketTimeline phase={phase} timeline={timeline} />
+                      {row.id ? (
+                        <div className="flex justify-end pt-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setChatHistoryIssue({
+                                id: row.id,
+                                title: title,
+                              });
+                            }}
+                            className="client-btn-secondary"
+                          >
+                            See chat history
+                          </button>
+                        </div>
+                      ) : null}
+                    </motion.div>
+                  ) : null}
                 </AnimatePresence>
               </div>
             );

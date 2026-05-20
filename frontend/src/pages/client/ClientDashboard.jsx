@@ -27,6 +27,18 @@ function formatDate(value) {
   });
 }
 
+function issueDescription(issue) {
+  const summary = String(issue.summary ?? "").trim();
+  if (summary) return summary;
+  return String(issue.firstMessage ?? "").trim();
+}
+
+function issueRowTitle(issue) {
+  const text = issueDescription(issue) || String(issue.displaySummary ?? "").trim();
+  if (!text) return "Issue";
+  return text.split("\n")[0].slice(0, 120);
+}
+
 export default function ClientDashboard() {
   const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -97,7 +109,11 @@ export default function ClientDashboard() {
       issues.map((issue) => ({
         id: issue.id,
         date: formatDate(issue.createdAt),
-        ticket: issue.summary || "Issue",
+        ticket: issueRowTitle(issue),
+        description: issueDescription(issue) || issueRowTitle(issue),
+        response: issue.response,
+        responseComments: issue.responseComments,
+        resolvedBy: issue.resolvedBy,
         timelinePhase: mapTicketStatusToPhase(issue.status),
         timeline: {
           created: {

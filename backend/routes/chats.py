@@ -31,12 +31,19 @@ class ConfirmBody(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-def _issue_dto(issue: Issue) -> dict[str, Any]:
+def _issue_dto(
+    issue: Issue, *, first_message: str | None = None
+) -> dict[str, Any]:
+    summary = (issue.summary or "").strip() or None
+    preview = (first_message or "").strip() or None
+    display_summary = summary or preview
     return {
         "id": issue.id,
         "userId": issue.user_id,
         "status": issue.status,
         "summary": issue.summary,
+        "displaySummary": display_summary,
+        "firstMessage": preview,
         "response": issue.response,
         "responseComments": issue.response_comments or [],
         "resolvedBy": issue.resolved_by,
@@ -150,16 +157,14 @@ def list_issues(
     current_user: User = Depends(get_current_user),
 ):
     issues = chat_service.list_issues(db, current_user.id)
-    return {"ok": True, "issues": [_issue_dto(i) for i in issues]}
-
-
-@router.get("/issues")
-def list_issues(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    issues = chat_service.list_issues(db, current_user.id)
-    return {"ok": True, "issues": [_chat_dto(i) for i in issues]}
+    issue_ids = [i.id for i in issues]
+    first_by_issue = chat_service.first_messages_by_issue(db, issue_ids)
+    return {
+        "ok": True,
+        "issues": [
+            _issue_dto(i, first_message=first_by_issue.get(i.id)) for i in issues
+        ],
+    }
 
 
 @router.post("/chats/{chat_id}/resume")
