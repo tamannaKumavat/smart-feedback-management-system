@@ -19,3 +19,4 @@ numpy==2.4.4
 typing-extensions==4.15.0
 pgvector==0.4.2
 supabase
+deprecation

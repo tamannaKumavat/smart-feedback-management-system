@@ -274,8 +274,9 @@ class TriageWorkflow:
             db.close()
 
     def generate_ticket_created_response(self, state: TriageState):
+        prefix = "Your comment is duly noted. " if state.get("human_assessment") == HumanAssessment.ADD_ADDITIONAL_CONTENT.value else ""
         return {
-            "final_user_response": f"Ticket with id {state.get('ticket_id')} was successfully created!"
+            "final_user_response": f"{prefix}Ticket with id {state.get('ticket_id')} was successfully created!"
         }
 
     def run(self, user_query: str, rag_results: list = [], stream: bool = False):
