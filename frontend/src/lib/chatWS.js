@@ -8,9 +8,8 @@ let listeners = []; // Array of { onMessage, onError, onClose } callbacks
 
 // --- WebSocket URL (adjust for production) ---
 const getWsUrl = () => {
-  // Use window.location.hostname for local dev (frontend and backend on same machine)
-  // Use window.location.host for production (same domain)
-  return `ws://${window.location.hostname}:8000/ws/chat`;
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}/ws/chat`;
 };
 
 // --- Initialize WebSocket ---

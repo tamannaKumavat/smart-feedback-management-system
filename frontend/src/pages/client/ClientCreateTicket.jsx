@@ -414,7 +414,7 @@ export default function ClientCreateTicket() {
     if (token) params.set("token", token);
     if (chatId) params.set("chat_id", chatId);
     const ws = new WebSocket(
-      `ws://${window.location.hostname}:8000/ws/chat?${params}`,
+      `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/chat?${params}`,
     );
     wsRef.current = ws;
     ws.onopen = () => {
