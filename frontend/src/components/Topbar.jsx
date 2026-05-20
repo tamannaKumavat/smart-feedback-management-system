@@ -1,5 +1,7 @@
 import { FiBell, FiMoon, FiSearch, FiSettings, FiShare2, FiSun } from "react-icons/fi";
 import { Link } from "react-router-dom";
+import { ClientLanguageSwitcher } from "@/i18n";
+import { useTranslation } from "@/i18n/useTranslation.js";
 import WebLogo from "./WebLogo.jsx";
 import { getSession } from "../lib/session.js";
 
@@ -19,24 +21,25 @@ function IconButton({ children, hasDot = false, className = "", onClick, ariaLab
   );
 }
 
-function ThemeToggleButton({ isDark, onToggle }) {
+function ThemeToggleButton({ isDark, onToggle, t }) {
+  const label = isDark ? t("topbar.switchToLight") : t("topbar.switchToDark");
   return (
     <button
       type="button"
       onClick={onToggle}
-      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      title={label}
+      aria-label={label}
       className="client-theme-toggle inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[12px] font-medium shadow-sm transition"
     >
       {isDark ? (
         <>
           <FiSun className="text-[16px]" aria-hidden />
-          <span>Light</span>
+          <span>{t("topbar.light")}</span>
         </>
       ) : (
         <>
           <FiMoon className="text-[16px]" aria-hidden />
-          <span>Dark</span>
+          <span>{t("topbar.dark")}</span>
         </>
       )}
     </button>
@@ -49,6 +52,7 @@ export default function Topbar({
   isDark = false,
   onToggleTheme,
 }) {
+  const { t } = useTranslation();
   const session = getSession();
   const user = session?.user;
   const isClient = mode === "client";
@@ -65,6 +69,13 @@ export default function Topbar({
   const avatarText =
     initialsFromName || email.slice(0, 2).toUpperCase() || "AD";
 
+  const portalTitle = isClient
+    ? t("topbar.clientPortal")
+    : "Admin Portal";
+  const searchPlaceholder = isClient
+    ? t("topbar.searchPlaceholder")
+    : "Search anything...";
+
   return (
     <header
       className={`sticky top-0 z-20 backdrop-blur ${
@@ -77,7 +88,7 @@ export default function Topbar({
         <Link to="/" className="inline-flex min-w-0 shrink items-center gap-3">
           <WebLogo className="h-8 w-auto sm:h-10" />
           <span className="hidden text-lg font-semibold text-content sm:inline">
-            {mode === "admin" ? "Admin Portal" : "Client Portal"}
+            {portalTitle}
           </span>
         </Link>
 
@@ -86,23 +97,37 @@ export default function Topbar({
             <FiSearch className="text-content-muted" />
             <input
               type="text"
-              placeholder="Search anything..."
+              placeholder={searchPlaceholder}
               className="w-full bg-transparent text-captionlarge text-content placeholder:text-content-muted focus:outline-none"
             />
           </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          {showThemeToggle && onToggleTheme ? (
-            <ThemeToggleButton isDark={isDark} onToggle={onToggleTheme} />
+          {isClient && showThemeToggle && onToggleTheme ? (
+            <>
+              <ClientLanguageSwitcher
+                id="topbar-language"
+                variant="topbar"
+                className="w-auto shrink-0"
+              />
+              <ThemeToggleButton
+                isDark={isDark}
+                onToggle={onToggleTheme}
+                t={t}
+              />
+            </>
           ) : null}
-          <IconButton ariaLabel="Settings">
+          <IconButton ariaLabel={isClient ? t("topbar.settings") : "Settings"}>
             <FiSettings size={16} />
           </IconButton>
-          <IconButton hasDot ariaLabel="Notifications">
+          <IconButton
+            hasDot
+            ariaLabel={isClient ? t("topbar.notifications") : "Notifications"}
+          >
             <FiBell size={16} />
           </IconButton>
-          <IconButton ariaLabel="Share">
+          <IconButton ariaLabel={isClient ? t("topbar.share") : "Share"}>
             <FiShare2 size={16} />
           </IconButton>
           <span className="ml-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-gray text-captionsmall font-semibold text-white">

@@ -21,6 +21,8 @@ export default function Dropdown({
   chevronClassName = "text-[#AFC3E6]",
   labelClassName,
   disabled = false,
+  displayValue = null,
+  menuAlign = "stretch",
   "aria-label": ariaLabel,
 }) {
   const [open, setOpen] = useState(false);
@@ -74,6 +76,9 @@ export default function Dropdown({
     "sm:rounded-2xl sm:py-3.5 sm:pl-5 sm:text-[14px]",
   ].join(" ");
 
+  const menuPositionClass =
+    menuAlign === "end" ? "right-0 left-auto w-max" : "left-0 right-0";
+
   return (
     <div ref={rootRef} className={`relative ${className}`}>
       <button
@@ -93,7 +98,7 @@ export default function Dropdown({
               : `min-w-0 flex-1 truncate ${isPlaceholder ? "font-normal text-[#D1D1E0]" : "text-[#555060]"}`
           }
         >
-          {displayLabel}
+          {displayValue ?? displayLabel}
         </span>
         <FiChevronDown
           className={`h-5 w-5 shrink-0 transition-transform duration-200 ${chevronClassName} ${open ? "rotate-180" : ""}`}
@@ -105,7 +110,7 @@ export default function Dropdown({
         <ul
           role="listbox"
           {...(id ? { "aria-activedescendant": `${id}-opt-${value}` } : {})}
-          className={`absolute left-0  right-0 z-50 mt-2 max-h-60 overflow-auto  rounded-[12px] border border-[#ECECF4] bg-white py-2 ${menuShadowClass} ${menuClassName}`}
+          className={`absolute z-50 mt-2 max-h-60 overflow-auto rounded-[12px] border border-[#ECECF4] bg-white py-2 ${menuPositionClass} ${menuShadowClass} ${menuClassName}`}
         >
           {options.map((opt) => {
             const selectedOpt = opt.value === value;
@@ -116,7 +121,7 @@ export default function Dropdown({
                 role="option"
                 aria-selected={selectedOpt}
                 onClick={() => pick(opt.value)}
-                className={`mx-1.5 cursor-pointer rounded-[12px] px-4 py-2 text-[13px] font-medium transition-colors sm:mx-2 sm:text-[14px] ${
+                className={`mx-1.5 cursor-pointer whitespace-nowrap rounded-[12px] px-4 py-2 text-[13px] font-medium transition-colors sm:mx-2 sm:text-[14px] ${
                   selectedOpt ? selectedOptionClassName : unselectedOptionClassName
                 }`}
               >

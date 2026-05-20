@@ -10,10 +10,17 @@ import {
   FiVideo,
 } from "react-icons/fi";
 import { IoTicketOutline } from "react-icons/io5";
+import { useTranslation } from "@/i18n/useTranslation.js";
 import {
   confirmationFollowUp,
   getTicketHistoryMessagesForThread,
 } from "../../../data/clientTicketHistoryDummy.jsx";
+
+function localizeSender(t, sender) {
+  if (sender === "You") return t("common.you");
+  if (sender === "Ruag team" || sender === "Ruag Team") return t("common.ruagTeam");
+  return sender;
+}
 
 const hairline = "border-slate-200";
 const inputFocus =
@@ -36,7 +43,7 @@ function TicketAvatar({ title, size = "md" }) {
   );
 }
 
-function PropertyMessageCard({ property }) {
+function PropertyMessageCard({ property, t }) {
   const img =
     "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=480&q=80&auto=format&fit=crop";
   return (
@@ -60,23 +67,27 @@ function PropertyMessageCard({ property }) {
           </p>
         </div>
         <div className="flex gap-3 text-[11px] text-slate-600">
-          <span>{property.beds} bed</span>
-          <span>{property.baths} bath</span>
+          <span>
+            {property.beds} {t("ticketHistory.property.bed")}
+          </span>
+          <span>
+            {property.baths} {t("ticketHistory.property.bath")}
+          </span>
           <span>{property.areaSqft} ft²</span>
         </div>
         <div className="grid grid-cols-3 gap-2 border-t border-slate-100 pt-2 text-[10px]">
           <div>
-            <p className="text-slate-400">Token price</p>
+            <p className="text-slate-400">{t("ticketHistory.property.tokenPrice")}</p>
             <p className="font-semibold text-slate-800">
               {property.tokenPrice}
             </p>
           </div>
           <div>
-            <p className="text-slate-400">Projected IRR</p>
+            <p className="text-slate-400">{t("ticketHistory.property.projectedIrr")}</p>
             <p className="font-semibold text-slate-800">{property.irr}</p>
           </div>
           <div>
-            <p className="text-slate-400">Projected APR</p>
+            <p className="text-slate-400">{t("ticketHistory.property.projectedApr")}</p>
             <p className="font-semibold text-slate-800">{property.apr}</p>
           </div>
         </div>
@@ -90,6 +101,7 @@ export default function TicketHistory({
   messagesByThread = {},
   sortOptions = [],
 }) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState(sortOptions[0]?.value ?? "newest");
   const [activeId, setActiveId] = useState(threads[0]?.id ?? "");
@@ -99,10 +111,10 @@ export default function TicketHistory({
 
   const filteredThreads = useMemo(() => {
     const q = query.trim().toLowerCase();
-    let list = threads.filter((t) => {
+    let list = threads.filter((thread) => {
       if (!q) return true;
-      const convo = Array.isArray(t.conversation)
-        ? t.conversation
+      const convo = Array.isArray(thread.conversation)
+        ? thread.conversation
             .map((c) => {
               const bits = [`${c.content ?? ""}`, `${c.file ?? ""}`];
               if (c.confirmationRequest?.summary)
@@ -112,7 +124,7 @@ export default function TicketHistory({
             .join(" ")
         : "";
       const hay =
-        `${t.ticketRef ?? ""} ${t.name ?? ""} ${t.subject ?? ""} ${t.category ?? ""} ${t.preview ?? ""} ${t.snippet ?? ""} ${convo}`.toLowerCase();
+        `${thread.ticketRef ?? ""} ${thread.name ?? ""} ${thread.subject ?? ""} ${thread.category ?? ""} ${thread.preview ?? ""} ${thread.snippet ?? ""} ${convo}`.toLowerCase();
       return hay.includes(q);
     });
     if (sort === "oldest") list = [...list].reverse();
@@ -182,12 +194,12 @@ export default function TicketHistory({
           className={`flex shrink-0 items-center justify-between gap-2 border-b ${hairline} px-4 py-3`}
         >
           <h2 className="text-[15px] font-semibold text-slate-900">
-            Ticket History
+            {t("ticketHistory.title")}
           </h2>
           <button
             type="button"
             className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border ${hairline} bg-white text-slate-500 shadow-sm transition hover:border-slate-300 hover:text-slate-800`}
-            aria-label="Compose"
+            aria-label={t("ticketHistory.compose")}
           >
             <FiEdit3 className="h-[18px] w-[18px]" strokeWidth={2} />
           </button>
@@ -203,9 +215,9 @@ export default function TicketHistory({
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search"
+              placeholder={t("common.search")}
               className={`w-full rounded-full border ${hairline} bg-white py-2.5 pl-10 pr-3 text-[13px] text-slate-900 placeholder:text-slate-400 ${inputFocus}`}
-              aria-label="Search messages"
+              aria-label={t("ticketHistory.searchMessages")}
             />
           </div>
         </div>
@@ -215,49 +227,53 @@ export default function TicketHistory({
         >
           {filteredThreads.length === 0 ? (
             <p className="px-4 py-8 text-center text-[13px] text-slate-500">
-              No threads match your search.
+              {t("ticketHistory.noThreads")}
             </p>
           ) : (
             <ul className={`divide-y ${hairline}`}>
-              {filteredThreads.map((t) => {
-                const selected = t.id === active?.id;
+              {filteredThreads.map((thread) => {
+                const selected = thread.id === active?.id;
                 return (
-                  <li key={t.id}>
+                  <li key={thread.id}>
                     <button
                       type="button"
-                      onClick={() => setActiveId(t.id)}
+                      onClick={() => setActiveId(thread.id)}
                       className={`flex w-full gap-3 px-3 py-3 text-left transition ${
                         selected
                           ? "bg-slate-50 shadow-[inset_3px_0_0_0_#0d9488]"
                           : "hover:bg-slate-50"
                       }`}
                     >
-                      <TicketAvatar title={t.name} />
+                      <TicketAvatar title={thread.name} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
                           <p className="truncate text-[13px] font-semibold text-slate-900">
-                            {t.name}
+                            {thread.name}
                           </p>
                           <span className="shrink-0 text-[11px] text-slate-400">
-                            {t.timeAgo}
+                            {thread.timeAgo}
                           </span>
                         </div>
                         <p className="truncate text-[12px] font-medium text-slate-600">
-                          {t.subject}
+                          {thread.subject}
                         </p>
                         <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-slate-500">
-                          {t.snippet}
+                          {thread.snippet}
                         </p>
                         <div className="mt-1.5 flex items-center gap-2 text-slate-400">
-                          {t.hasAttachment ? (
+                          {thread.hasAttachment ? (
                             <FiPaperclip
                               className="h-3.5 w-3.5"
-                              aria-label="Has attachment"
+                              aria-label={t("ticketHistory.hasAttachment")}
                             />
                           ) : null}
                           <FiStar
-                            className={`h-3.5 w-3.5 ${t.starred ? "fill-amber-400 text-amber-400" : "text-slate-300"}`}
-                            aria-label={t.starred ? "Starred" : "Not starred"}
+                            className={`h-3.5 w-3.5 ${thread.starred ? "fill-amber-400 text-amber-400" : "text-slate-300"}`}
+                            aria-label={
+                              thread.starred
+                                ? t("ticketHistory.starred")
+                                : t("ticketHistory.notStarred")
+                            }
                           />
                         </div>
                       </div>
@@ -285,13 +301,13 @@ export default function TicketHistory({
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-0.5 text-slate-500">
-                {[{ label: "More", Icon: FiMoreHorizontal }].map(
-                  ({ label, Icon }) => (
+                {[{ labelKey: "common.more", Icon: FiMoreHorizontal }].map(
+                  ({ labelKey, Icon }) => (
                     <button
-                      key={label}
+                      key={labelKey}
                       type="button"
                       className="rounded-lg p-2 transition hover:bg-slate-100 hover:text-slate-900"
-                      aria-label={label}
+                      aria-label={t(labelKey)}
                     >
                       <Icon className="h-5 w-5" strokeWidth={2} />
                     </button>
@@ -334,7 +350,7 @@ export default function TicketHistory({
                         className={`mb-1 flex max-w-[min(100%,520px)] flex-col ${align}`}
                       >
                         <span className="mb-1 px-1 text-[11px] text-slate-400">
-                          {msg.sender} · {msg.time}
+                          {localizeSender(t, msg.sender)} · {msg.time}
                         </span>
                         <div
                           className={
@@ -352,14 +368,14 @@ export default function TicketHistory({
                               {msg.body ? <p>{msg.body}</p> : null}
                               <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
                                 <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                                  Summary
+                                  {t("common.summary")}
                                 </p>
                                 <p className="mt-1.5 text-[13px] leading-relaxed text-slate-800">
                                   {msg.summary}
                                 </p>
                               </div>
                               <p className="mt-3 text-[13px] text-slate-700">
-                                Do you confirm this is correct?
+                                {t("ticketHistory.confirmQuestion")}
                               </p>
                               {showConfirmActions ? (
                                 <div className="mt-3 flex flex-wrap gap-2">
@@ -373,7 +389,7 @@ export default function TicketHistory({
                                       }))
                                     }
                                   >
-                                    No
+                                    {t("common.no")}
                                   </button>
                                   <button
                                     type="button"
@@ -385,7 +401,7 @@ export default function TicketHistory({
                                       }))
                                     }
                                   >
-                                    Yes
+                                    {t("common.yes")}
                                   </button>
                                 </div>
                               ) : null}
@@ -393,7 +409,7 @@ export default function TicketHistory({
                           ) : null}
 
                           {isCard ? (
-                            <PropertyMessageCard property={msg.property} />
+                            <PropertyMessageCard property={msg.property} t={t} />
                           ) : null}
 
                           {msg.file && !isCard && !isConfirmation ? (
@@ -469,7 +485,7 @@ export default function TicketHistory({
           </>
         ) : (
           <div className="flex flex-1 items-center justify-center p-8 text-[14px] text-slate-500">
-            Select a conversation
+            {t("ticketHistory.selectConversation")}
           </div>
         )}
       </section>

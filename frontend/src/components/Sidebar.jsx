@@ -7,6 +7,7 @@ import {
   FiPieChart,
   FiUsers,
 } from "react-icons/fi";
+import { useTranslation } from "@/i18n/useTranslation.js";
 
 function itemClassName({ isActive }, mode) {
   if (mode === "client") {
@@ -54,6 +55,9 @@ function SidebarSection({ title, items, mode }) {
 }
 
 export default function Sidebar({ mode, onLogout }) {
+  const { t } = useTranslation();
+  const isClient = mode === "client";
+
   const adminItems = [
     {
       to: "/admin/dashboard",
@@ -67,25 +71,27 @@ export default function Sidebar({ mode, onLogout }) {
       icon: <FiActivity size={16} />,
     },
   ];
+
   const clientItems = [
     {
       to: "/client/dashboard",
-      label: "Overview",
+      label: t("sidebar.overview"),
       icon: <FiPieChart size={16} />,
     },
     {
       to: "/client/create-ticket",
-      label: "Create a Ticket",
+      label: t("sidebar.createTicket"),
       icon: <FiEdit3 size={16} />,
     },
     {
       to: "/client/drafts",
-      label: "Drafts",
+      label: t("sidebar.drafts"),
       icon: <FiFileText size={16} />,
     },
   ];
 
-  const primaryItems = mode === "admin" ? adminItems : clientItems;
+  const primaryItems = isClient ? clientItems : adminItems;
+  const menuTitle = isClient ? t("sidebar.menu") : "Menu";
 
   const asideClass =
     mode === "client"
@@ -96,7 +102,7 @@ export default function Sidebar({ mode, onLogout }) {
     <aside className={asideClass}>
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1">
-          <SidebarSection title="Menu" items={primaryItems} mode={mode} />
+          <SidebarSection title={menuTitle} items={primaryItems} mode={mode} />
         </div>
 
         <button
@@ -109,7 +115,7 @@ export default function Sidebar({ mode, onLogout }) {
           }`}
         >
           <FiLogOut size={16} />
-          Logout
+          {isClient ? t("sidebar.logout") : "Logout"}
         </button>
       </div>
     </aside>
