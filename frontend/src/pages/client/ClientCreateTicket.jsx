@@ -170,6 +170,7 @@ function TypingIndicator() {
   );
 }
 
+
 const GREETING_MSG = { id: "ai-greeting", sender: "ai", content: "How can I help you with today?", aiAnswerType: "normal", createdAt: new Date().toISOString() };
 
 export default function ClientCreateTicket() {
