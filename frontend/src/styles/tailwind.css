@@ -660,6 +660,27 @@
     }
   }
 
+  .client-portal .client-skeleton {
+    background: linear-gradient(
+      90deg,
+      rgb(226 232 240 / 0.55) 0%,
+      rgb(241 245 249 / 0.95) 50%,
+      rgb(226 232 240 / 0.55) 100%
+    );
+    background-size: 200% 100%;
+    animation: client-shimmer 1.6s ease-in-out infinite;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-skeleton {
+    background: linear-gradient(
+      90deg,
+      rgb(51 65 85 / 0.45) 0%,
+      rgb(71 85 105 / 0.75) 50%,
+      rgb(51 65 85 / 0.45) 100%
+    );
+    background-size: 200% 100%;
+  }
+
   .client-portal .client-chat-shell {
     @apply mx-auto flex h-full min-h-0 w-full max-w-[1120px] flex-col overflow-hidden rounded-2xl;
     background: var(--client-chat-shell-bg);
