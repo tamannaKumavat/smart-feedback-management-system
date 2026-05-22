@@ -110,29 +110,29 @@ class RAGAgent:
                 LIMIT :top_k
             """)
 
-            # sql_tickets = text("""
-            #     SELECT
-            #         summary              AS question_text,
-            #         recommended_action   AS answer_text,
-            #         'ticket'             AS source_type,
-            #         NULL                 AS doc_id,
-            #         NULL                 AS doc_version,
-            #         NULL                 AS chunk_id,
-            #         case_id,
-            #         NULL                 AS language,
-            #         team                 AS department,
-            #         priority             AS severity,
-            #         issue_type           AS intent,
-            #         1 - (summary_embedding <=> CAST(:vec AS vector)) AS score,
-            #         'summary'            AS matched_on
-            #     FROM tickets
-            #     WHERE status = 'Resolved'
-            #       AND summary_embedding IS NOT NULL
-            #       AND recommended_action IS NOT NULL
-            #       AND 1 - (summary_embedding <=> CAST(:vec AS vector)) >= :threshold
-            #     ORDER BY score DESC
-            #     LIMIT :top_k
-            # """)
+            sql_tickets = text("""
+                SELECT
+                    summary              AS question_text,
+                    response             AS answer_text,
+                    'ticket'             AS source_type,
+                    NULL                 AS doc_id,
+                    NULL                 AS doc_version,
+                    NULL                 AS chunk_id,
+                    case_id,
+                    NULL                 AS language,
+                    team                 AS department,
+                    priority             AS severity,
+                    issue_type           AS intent,
+                    1 - (summary_embedding <=> CAST(:vec AS vector)) AS score,
+                    'summary'            AS matched_on
+                FROM tickets
+                WHERE status IN ('Resolved', 'Done')
+                  AND summary_embedding IS NOT NULL
+                  AND response IS NOT NULL
+                  AND 1 - (summary_embedding <=> CAST(:vec AS vector)) >= :threshold
+                ORDER BY score DESC
+                LIMIT :top_k
+            """)
 
             db = SessionLocal()
             try:
@@ -141,19 +141,27 @@ class RAGAgent:
                     "threshold": RELEVANCE_THRESHOLD,
                     "top_k": top_k,
                 }).fetchall()
-                # Uncomment below and save summary_embedding in update_ticket to enable ticket vector search
-                # ticket_rows = db.execute(sql_tickets, {
-                #     "vec": vec_str,
-                #     "threshold": RELEVANCE_THRESHOLD,
-                #     "top_k": top_k,
-                # }).fetchall()
+                ticket_rows = db.execute(sql_tickets, {
+                    "vec": vec_str,
+                    "threshold": RELEVANCE_THRESHOLD,
+                    "top_k": top_k,
+                }).fetchall()
             finally:
                 db.close()
 
-            # results = [self._row_to_dict(r) for r in chunk_rows + ticket_rows]
-            # results.sort(key=lambda r: r["score"], reverse=True)
-            # return results[:top_k]
-            return [self._row_to_dict(r) for r in chunk_rows]
+            results = [self._row_to_dict(r) for r in chunk_rows + ticket_rows]
+            results.sort(key=lambda r: r["score"], reverse=True)
+            # Deduplicate by case_id, keeping the highest-scoring entry per ticket
+            seen_case_ids: set[str] = set()
+            deduped = []
+            for r in results:
+                cid = r.get("case_id")
+                if cid and cid in seen_case_ids:
+                    continue
+                if cid:
+                    seen_case_ids.add(cid)
+                deduped.append(r)
+            return deduped[:top_k]
 
         except Exception as exc:
             logger.error("RAGAgent._vector_search failed: %s — falling back to keyword.", exc)

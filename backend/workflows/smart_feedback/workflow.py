@@ -233,6 +233,13 @@ def build_workflow(
 
 
 def _build_live_chat_model():
+    from config import OLLAMA_BASE_URL, OLLAMA_MODEL_ID
+
+    if OLLAMA_MODEL_ID:
+        from langchain_ollama import ChatOllama
+        _debug("[workflow] using Ollama model=%s base_url=%s", OLLAMA_MODEL_ID, OLLAMA_BASE_URL)
+        return ChatOllama(model=OLLAMA_MODEL_ID, base_url=OLLAMA_BASE_URL, temperature=0.3)
+
     from langchain_ibm import ChatWatsonx
     from config import (
         WATSONX_API_KEY,
@@ -492,11 +499,7 @@ class SmartFeedbackWorkflow:
         _debug("[workflow] node=rag_result_user_assessment start")
         rag_answer = state.get("engagement_response", "")
         interrupt_data: InterruptData = {
-            "content": (
-                f"{rag_answer}\n\nDoes this answer your question?"
-                if rag_answer
-                else "Please state if this answers your question."
-            ),
+            "content": "Does this answer your question?",
             "options": ["yes", "no"]
         }
         response = interrupt(
@@ -508,6 +511,7 @@ class SmartFeedbackWorkflow:
         if response.lower() == "no":
             updated_state["rag_results"] = []
             updated_state["analysis_agent_result"] = None
+            updated_state["engagement_response"] = ""
         updated_state["rag_user_assessment"] = response.lower()
         _debug(
             "[workflow] node=rag_result_user_assessment response=%s",
@@ -643,8 +647,10 @@ class SmartFeedbackWorkflow:
     ###
     def human_ticket_assessment(self, state: SmartFeedbackState) -> SmartFeedbackState:
         _debug("[workflow] node=human_ticket_assessment waiting for interrupt")
+        came_from_additional = state.get("human_assessment") == HumanAssessment.ADD_ADDITIONAL_CONTENT
+        content = "Your comment is duly noted. Does this ticket look correct?" if came_from_additional else "Does this ticket look correct?"
         interrupt_data: InterruptData = {
-            "content": "Does this ticket look correct?",
+            "content": content,
             "options": ["ok", "redo", "additional"],
         }
         assessment = interrupt(interrupt_data)

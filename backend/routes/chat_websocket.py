@@ -95,7 +95,7 @@ async def websocket_endpoint(
         history = chat_service.list_messages(db, issue.id, user.id)
         prior_msgs = [{"sender": m.sender, "content": m.content} for m in history]
         await websocket.accept()
-        if prior_msgs:
+        if prior_msgs and not MOCK_MODE:
             initial_state = None  # If we want to continue the graph from the specific state, we need to pass the initial state as None. Only than it can continue!
         else:
             initial_state = {
@@ -189,13 +189,26 @@ async def websocket_endpoint(
                                     attachment_ids=resp_att_ids,
                                     user_id=user.id,
                                 )
+                        _additional_content_prompts = {
+                            "what would you like to change or add?",
+                            "please add you comment to the ticket",
+                        }
+                        is_additional_content_prompt = interrupt_content.lower().strip() in _additional_content_prompts
+                        if resp_content and interrupt_content and not interrupt_options and not is_additional_content_prompt:
+                            ack = "Your comment is duly noted."
+                            chat_service.record_ai_message(db, issue, ack, AI_ANSWER_NORMAL)
+                            await websocket.send_text(json.dumps({"type": "message", "content": ack}))
                         user_input = Command(resume=resp_content)
 
                     elif "end_node" in chunk.get("data", {}):
-                        summary = chunk["data"]["end_node"].get(
-                            "final_user_response", ""
-                        )
+                        end_data = chunk["data"]["end_node"]
+                        summary = end_data.get("final_user_response", "")
+                        if end_data.get("rag_user_assessment") == "yes":
+                            closing_msg = "Thank you for reaching out — glad I could help! Don't hesitate to contact us if you have any other questions."
+                            chat_service.record_ai_message(db, issue, closing_msg, AI_ANSWER_NORMAL)
+                            await websocket.send_text(json.dumps({"type": "message", "content": closing_msg}))
                         chat_service.close_issue(db, issue, summary=summary or None)
+                        await websocket.send_text(json.dumps({"type": "chat_closed"}))
                         should_run = False
 
                     elif "engagement_with_user" in chunk.get("data", {}):

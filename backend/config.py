@@ -18,6 +18,11 @@ WATSONX_PROJECT_ID = os.getenv("WATSONX_PROJECT_ID", "")
 WATSONX_URL = os.getenv("WATSONX_URL", "https://eu-de.ml.cloud.ibm.com")
 WATSONX_MODEL_ID = os.getenv("WATSONX_MODEL_ID", "mistralai/mistral-small-3-1-24b-instruct-2503")
 WATSONX_EMBEDDING_MODEL_ID = os.getenv("WATSONX_EMBEDDING_MODEL_ID", "ibm/granite-embedding-278m-multilingual")
+
+# Set OLLAMA_MODEL_ID to use a local Ollama model instead of WatsonX (e.g. llama3.2).
+# Leave unset to use WatsonX.
+OLLAMA_MODEL_ID = os.getenv("OLLAMA_MODEL_ID", "")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 MOCK_MODE = os.getenv("MOCK_MODE", "true").lower() == "true"
 RAG_RELEVANCE_THRESHOLD = float(os.getenv("RAG_RELEVANCE_THRESHOLD", "0.75"))
 RAG_KEYWORD_FALLBACK_SCORE = float(os.getenv("RAG_KEYWORD_FALLBACK_SCORE", "0.35"))

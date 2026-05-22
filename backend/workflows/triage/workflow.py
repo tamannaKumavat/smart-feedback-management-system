@@ -133,10 +133,11 @@ class TriageWorkflow:
         self._workflow = workflow.compile(checkpointer=self.checkpointer, debug=True)
 
     def human_ticket_assessment(self, state: TriageState) -> TriageState:
-
+        came_from_additional = state.get("human_assessment") == HumanAssessment.ADD_ADDITIONAL_CONTENT.value
+        prefix = "Your comment is duly noted. " if came_from_additional else ""
         while True:
             assessment = interrupt(
-                f"Please review the ticket answer one of the following options: {', '.join([i.value for i in HumanAssessment])}"
+                f"{prefix}Please review the ticket and choose one of the following options: {', '.join([i.value for i in HumanAssessment])}"
             )
             if assessment in [i.value for i in HumanAssessment]:
                 return {"human_assessment": assessment}
@@ -274,9 +275,8 @@ class TriageWorkflow:
             db.close()
 
     def generate_ticket_created_response(self, state: TriageState):
-        prefix = "Your comment is duly noted. " if state.get("human_assessment") == HumanAssessment.ADD_ADDITIONAL_CONTENT.value else ""
         return {
-            "final_user_response": f"{prefix}Ticket with id {state.get('ticket_id')} was successfully created!"
+            "final_user_response": f"Ticket with id {state.get('ticket_id')} was successfully created!"
         }
 
     def run(self, user_query: str, rag_results: list = [], stream: bool = False):
