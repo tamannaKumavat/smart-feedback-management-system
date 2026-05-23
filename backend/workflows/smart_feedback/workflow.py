@@ -443,7 +443,7 @@ class SmartFeedbackWorkflow:
                 HumanAssessment.REDO_TICKET: "triage_request",
             },
         )
-        workflow.add_edge("add_additional_information_to_ticket", "human_ticket_assessment")
+        workflow.add_edge("add_additional_information_to_ticket", "update_ticket")
         workflow.add_edge("update_ticket", "generate_ticket_created_response")
         workflow.add_edge("generate_ticket_created_response", "add_ticket_to_jira")
         workflow.add_edge("add_ticket_to_jira", "generate_chat_summary")
@@ -497,7 +497,6 @@ class SmartFeedbackWorkflow:
 
     def rag_result_user_assessment(self, state: SmartFeedbackState):
         _debug("[workflow] node=rag_result_user_assessment start")
-        rag_answer = state.get("engagement_response", "")
         interrupt_data: InterruptData = {
             "content": "Does this answer your question?",
             "options": ["yes", "no"]
