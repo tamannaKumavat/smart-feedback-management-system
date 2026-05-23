@@ -4,6 +4,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { FaRegShareFromSquare } from "react-icons/fa6";
 import { FiPaperclip, FiPlus, FiSend, FiSmile, FiX } from "react-icons/fi";
 import PortalLayout from "../../layouts/PortalLayout.jsx";
+
 import {
   attachmentDownloadUrl,
   createChat,
@@ -528,11 +529,11 @@ export default function ClientCreateTicket() {
             {displayMessages.map(renderMessage)}
 
             {/* Typing indicator - shows when input is disabled but not showing options */}
-            {(!wsConnected || !aiWaitingForInput || sending) && <TypingIndicator />}
+            {(wsConnected || !aiWaitingForInput || sending) && <TypingIndicator />}
 
             {/* Suggested prompts - shows only after the greeting message was sent.*/}
             {messages.length === 1 && (
-              <motion.div className="flex flex-wrap gap-2 p-4" {...fadeInUp}>
+              <motion.div className="mt-1 grid gap-2 sm:grid-cols-2" {...fadeInUp}>
                 {SUGGESTED_PROMPTS.map((prompt) => (
                   <button
                     key={prompt}
@@ -548,15 +549,14 @@ export default function ClientCreateTicket() {
             )}
 
             {pendingOptions && (
-              <motion.div className="flex flex-wrap gap-2 p-4" {...fadeInUp}>
+              <motion.div className="mt-1 grid gap-2 sm:grid-cols-4" {...fadeInUp}>
                 {pendingOptions.map((option) => (
                   <button
                     key={option}
                     type="button"
                     onClick={() => handleOptionChoice(option)}
                     disabled={sending}
-                    className={btnYes}
-                  >
+                    className={"client-chat-option-btn"}                  >
                     {option}
                   </button>
                 ))}
@@ -567,7 +567,7 @@ export default function ClientCreateTicket() {
 
         <form
           onSubmit={handleSubmit}
-          className="shrink-0 border-t border-slate-200/90 bg-white px-4 pb-4 pt-3 sm:px-6"
+          className="client-chat-footer"
         >
           <input
             ref={fileInputRef}

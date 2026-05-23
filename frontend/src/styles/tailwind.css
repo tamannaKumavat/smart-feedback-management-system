@@ -779,7 +779,8 @@
   .client-portal .client-chat-prompt-btn {
     @apply rounded-full border border-border-subtle bg-white px-3.5 py-2 text-left text-[13px] text-content shadow-sm transition hover:bg-surface-muted;
   }
-
+.client-portal .client-chat-option-btn {
+  @apply rounded-full border border-border-subtle bg-green-400 px-3.5 py-2 text-[13px] text-white shadow-sm transition hover:bg-green-500 flex items-center justify-center;}
   .client-portal .client-chat-prompt-btn:hover {
     border-color: rgb(13 148 136 / 0.28);
   }
