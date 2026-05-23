@@ -559,7 +559,7 @@ class SmartFeedbackWorkflow:
             }
 
         if state.get("is_first_message", True):
-            answer = interrupt("")
+            answer = interrupt("How can I help you today?")
             state["user_query"] = answer
             chain = (
                 chat_template_engagement_entry
