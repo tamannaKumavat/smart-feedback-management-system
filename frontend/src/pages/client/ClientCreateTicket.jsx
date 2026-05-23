@@ -171,7 +171,7 @@ function TypingIndicator() {
 }
 
 
-const GREETING_MSG = { id: "ai-greeting", sender: "ai", content: "How can I help you with today?", aiAnswerType: "normal", createdAt: new Date().toISOString() };
+const GREETING_MSG = { id: "ai-greeting", sender: "ai", content: "How can I help you today?", aiAnswerType: "normal", createdAt: new Date().toISOString() };
 
 export default function ClientCreateTicket() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -395,6 +395,14 @@ export default function ClientCreateTicket() {
       });
       showSuccess("Ticket created");
       setSending(false);
+      return;
+    }
+
+    if (data.type === "chat_closed") {
+      streamingContentRef.current = "";
+      setStreamingDraft(null);
+      setSending(false);
+      setChat((prev) => (prev ? { ...prev, status: "closed" } : prev));
       return;
     }
 
