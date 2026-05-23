@@ -6,7 +6,6 @@ import { FiPaperclip, FiPlus, FiSend, FiSmile, FiX } from "react-icons/fi";
 import PortalLayout from "../../layouts/PortalLayout.jsx";
 import {
   attachmentDownloadUrl,
-  confirmSummary,
   createChat,
   getMessages,
   markChatAsDraft,
@@ -179,63 +178,63 @@ export default function ClientCreateTicket() {
 
 
 
-useEffect(() => {
-  let cancelled = false;
-  
-  async function initializeChat() {
-    try {
-      if (chatId) {
-        // Resume existing chat from URL parameter
-        const [resumed, history] = await Promise.all([
-          resumeChat(chatId),
-          getMessages(chatId),
-        ]);
-        
+  useEffect(() => {
+    let cancelled = false;
+
+    async function initializeChat() {
+      try {
+        if (chatId) {
+          // Resume existing chat from URL parameter
+          const [resumed, history] = await Promise.all([
+            resumeChat(chatId),
+            getMessages(chatId),
+          ]);
+
+          if (cancelled) return;
+          setChat(resumed.chat);
+          setMessages(history.messages || []);
+        } else {
+          // Create brand new chat
+          const created = await createChat();
+          if (cancelled) return;
+          setChat(created.chat);
+          setMessages([]);
+        }
+      } catch (err) {
         if (cancelled) return;
-        setChat(resumed.chat);
-        setMessages(history.messages || []);
-      } else {
-        // Create brand new chat
-        const created = await createChat();
-        if (cancelled) return;
-        setChat(created.chat);
-        setMessages([]);
+        showError(err, "Could not initialize chat");
       }
-    } catch (err) {
-      if (cancelled) return;
-      showError(err, "Could not initialize chat");
     }
-  }
-  
-  initializeChat();
-  
-  return () => {
-    cancelled = true;
-  };
-}, [chatId]); // Only depends on chatId from URL
 
-// Step 2: Keep chatRef in sync with chat state
-useEffect(() => {
-  chatRef.current = chat;
-}, [chat]);
+    initializeChat();
 
-// Mark as draft when navigating away or closing the tab mid-flow.
-// mark_as_draft on the backend is a no-op for already-closed issues.
-useEffect(() => {
-  if (!chat) return;
-  const markDraft = () => {
-    if (chatRef.current?.id) markChatAsDraft(chatRef.current.id);
-  };
-  window.addEventListener("beforeunload", markDraft);
-  return () => {
-    window.removeEventListener("beforeunload", markDraft);
-    markDraft(); // also fires on React unmount (SPA navigation)
-  };
-}, [chat?.id]);
+    return () => {
+      cancelled = true;
+    };
+  }, [chatId]); // Only depends on chatId from URL
 
-// Step 3: Connect WebSocket ONLY after chat is initialized
-useEffect(() => {
-  if (!chat) return; // Wait for chat to be created/loaded
+  // Step 2: Keep chatRef in sync with chat state
+  useEffect(() => {
+    chatRef.current = chat;
+  }, [chat]);
+
+  // Mark as draft when navigating away or closing the tab mid-flow.
+  // mark_as_draft on the backend is a no-op for already-closed issues.
+  useEffect(() => {
+    if (!chat) return;
+    const markDraft = () => {
+      if (chatRef.current?.id) markChatAsDraft(chatRef.current.id);
+    };
+    window.addEventListener("beforeunload", markDraft);
+    return () => {
+      window.removeEventListener("beforeunload", markDraft);
+      markDraft(); // also fires on React unmount (SPA navigation)
+    };
+  }, [chat?.id]);
+
+  // Step 3: Connect WebSocket ONLY after chat is initialized
+  useEffect(() => {
+    if (!chat) return; // Wait for chat to be created/loaded
 
     const wsParams = new URLSearchParams();
     if (token) wsParams.set("token", token);
@@ -244,7 +243,7 @@ useEffect(() => {
     if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
       return;
     }
-    
+
     const setupWebSocket = () => {
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -252,11 +251,11 @@ useEffect(() => {
       ws.onopen = () => {
         console.log("[WS] Connected");
         setWsConnected(true);
-        setAiWaitingForInput(false);
+        setAiWaitingForInput(true);
         setPendingOptions(null);
         showSuccess("Connected to server");
-        
-      }; 
+
+      };
       ws.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data);
@@ -319,41 +318,41 @@ useEffect(() => {
     };
   }, [chat]);
 
-async function handleOptionChoice(option) {
-  if (!option || sending || !pendingOptions) return;
-  setPendingOptions(null);
-  setSending(true);
+  async function handleOptionChoice(option) {
+    if (!option || sending || !pendingOptions) return;
+    setPendingOptions(null);
+    setSending(true);
 
-  setMessages((prev) => [
-    ...prev,
-    {
-      id: `user-${Date.now()}`,
-      sender: "user",
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `user-${Date.now()}`,
+        sender: "user",
+        content: option,
+        aiAnswerType: "normal",
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+
+    const wsPayload = JSON.stringify({
+      type: "option_response",
       content: option,
-      aiAnswerType: "normal",
-      createdAt: new Date().toISOString(),
-    },
-  ]);
+    });
 
-  const wsPayload = JSON.stringify({
-    type: "option_response",
-    content: option,
-  });
-
-  if (wsRef.current?.readyState === WebSocket.OPEN) {
-    wsRef.current.send(wsPayload);
-    setSending(false); // <-- Critical: Re-enable input after sending
-  } else {
-    showError("Connection lost. Please try again.");
-    setSending(false);
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(wsPayload);
+      setSending(false); // <-- Critical: Re-enable input after sending
+    } else {
+      showError("Connection lost. Please try again.");
+      setSending(false);
+    }
   }
-}
   // Auto-scroll to bottom when messages update
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages]);
-    const displayMessages = chatId ? messages : [...messages];
+  const displayMessages = chatId ? messages : [...messages];
   // Handle file selection
   const handleOpenFilePicker = () => {
     fileInputRef.current?.click();
@@ -375,55 +374,58 @@ async function handleOptionChoice(option) {
   };
 
   // Handle form submission
-const handleSubmit = async (event) => {
-  event.preventDefault();
-  const trimmed = messageInput.trim();
-  if ((!trimmed && !pendingFile) || sending || !aiWaitingForInput) return;
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    const trimmed = messageInput.trim();
+    if ((!trimmed && !pendingFile) || sending || !aiWaitingForInput) return;
 
-  setSending(true);
-  setAiWaitingForInput(false);
-  const contentToSend = trimmed || `Attached: ${pendingFile?.name ?? "file"}`;
-  setMessageInput("");
-  setPendingFile(null);
+    setSending(true);
+    setAiWaitingForInput(false);
+    const contentToSend = trimmed || `Attached: ${pendingFile?.name ?? "file"}`;
+    setMessageInput("");
+    setPendingFile(null);
 
-  // Add user message to UI immediately
-  setMessages((prev) => [
-    ...prev,
-    {
-      id: `user-${Date.now()}`,
-      sender: "user",
-      content: contentToSend,
-      aiAnswerType: "normal",
-      createdAt: new Date().toISOString(),
-      attachments: pendingFile ? [{ id: "temp", filename: pendingFile.name }] : [],
-    },
-  ]);
+    // Add user message to UI immediately
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `user-${Date.now()}`,
+        sender: "user",
+        content: contentToSend,
+        aiAnswerType: "normal",
+        createdAt: new Date().toISOString(),
+        attachments: pendingFile ? [{ id: "temp", filename: pendingFile.name }] : [],
+      },
+    ]);
 
-  // Upload file if attached (but don't send attachment ID in the message)
-  if (pendingFile) {
-    setUploading(true);
-    try {
-      await uploadAttachment({
-        chatId: "temp", // Replace with actual chat ID if needed
-        file: pendingFile,
-      });
-      // Optionally update the message with the attachment ID later
-    } catch (err) {
-      showError(err, "Upload failed");
-    } finally {
-      setUploading(false);
+    // Upload file if attached (but don't send attachment ID in the message)
+    if (pendingFile) {
+      setUploading(true);
+      try {
+        await uploadAttachment({
+          chatId: "temp", // Replace with actual chat ID if needed
+          file: pendingFile,
+        });
+        // Optionally update the message with the attachment ID later
+      } catch (err) {
+        showError(err, "Upload failed");
+      } finally {
+        setUploading(false);
+      }
     }
-  }
 
-  // Send raw text via WebSocket (like the simple script)
-  if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-    wsRef.current.send(contentToSend); // Send raw text, not JSON
-  } else {
-    showError("WebSocket not connected");
-  }
-  setSending(false);
-};
+    // Send raw text via WebSocket (like the simple script)
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(contentToSend); // Send raw text, not JSON
+    } else {
+      showError("WebSocket not connected");
+    }
+    setSending(false);
+  };
 
+  const handleSuggestedPrompt = (prompt) => {
+    setMessageInput(prompt);
+  };
 
 
   // Start a new chat
@@ -453,7 +455,7 @@ const handleSubmit = async (event) => {
   const handleShare = () => {
     const url = typeof window !== "undefined" ? window.location.href : "";
     if (navigator.share) {
-      navigator.share({ title: "Chat", url }).catch(() => {});
+      navigator.share({ title: "Chat", url }).catch(() => { });
     } else if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(url);
       showSuccess("Link copied");
@@ -493,7 +495,7 @@ const handleSubmit = async (event) => {
     );
   };
 
-const inputDisabled = !wsConnected || !aiWaitingForInput || sending || (pendingOptions?.length > 0);
+  const inputDisabled = !wsConnected || !aiWaitingForInput || sending || (pendingOptions?.length > 0);
   return (
     <PortalLayout mode="client">
       <section className="mx-auto flex h-[calc(100dvh-6rem)] max-h-[calc(100dvh-6rem)] min-h-0 w-full max-w-[920px] flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
@@ -521,28 +523,47 @@ const inputDisabled = !wsConnected || !aiWaitingForInput || sending || (pendingO
             </button>
           </div>
         </header>
-
-        <div ref={scrollRef} className={`client-chat-messages ${scrollPretty}`}>
+        <div ref={scrollRef} className={`client-chat-messages ${scrollPretty} flex-1 min-h-0`}>
           <div className="client-chat-thread">
             {displayMessages.map(renderMessage)}
-                        {pendingOptions && (
-      <motion.div className="flex flex-wrap gap-2 p-4" {...fadeInUp}>
-        {pendingOptions.map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => handleOptionChoice(option)}
-            disabled={sending}
-            className={btnYes}
-          >
-            {option}
-          </button>
-        ))}
-      </motion.div>    )}
-            {/**/} 
+
+            {/* Typing indicator - shows when input is disabled but not showing options */}
+            {(!wsConnected || !aiWaitingForInput || sending) && <TypingIndicator />}
+
+            {/* Suggested prompts - shows only after the greeting message was sent.*/}
+            {messages.length === 1 && (
+              <motion.div className="flex flex-wrap gap-2 p-4" {...fadeInUp}>
+                {SUGGESTED_PROMPTS.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    className="client-chat-prompt-btn"
+                    onClick={() => handleSuggestedPrompt(prompt)}
+                    disabled={inputDisabled}
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </motion.div>
+            )}
+
+            {pendingOptions && (
+              <motion.div className="flex flex-wrap gap-2 p-4" {...fadeInUp}>
+                {pendingOptions.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => handleOptionChoice(option)}
+                    disabled={sending}
+                    className={btnYes}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </motion.div>
+            )}
           </div>
         </div>
-        
 
         <form
           onSubmit={handleSubmit}
