@@ -121,8 +121,19 @@ export default function ClientDashboard() {
             at: formatDate(issue.createdAt),
             detail: "Issue created",
           },
-          classified: null,
-          inProgress: null,
+          classified:
+            ["active", "closed"].includes(
+              String(issue.status || "").toLowerCase(),
+            )
+              ? { detail: "Issue classified" }
+              : null,
+          inProgress:
+            String(issue.status || "").toLowerCase() === "active"
+              ? {
+                  at: formatDate(issue.updatedAt || issue.createdAt),
+                  detail: "Issue in progress",
+                }
+              : null,
           resolved:
             String(issue.status || "").toLowerCase() === "closed"
               ? {

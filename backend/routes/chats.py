@@ -148,7 +148,14 @@ def list_drafts(
     current_user: User = Depends(get_current_user),
 ):
     drafts = chat_service.list_drafts(db, current_user.id)
-    return {"ok": True, "drafts": [_issue_dto(c) for c in drafts]}
+    draft_ids = [d.id for d in drafts]
+    first_by_issue = chat_service.first_messages_by_issue(db, draft_ids)
+    return {
+        "ok": True,
+        "drafts": [
+            _issue_dto(d, first_message=first_by_issue.get(d.id)) for d in drafts
+        ],
+    }
 
 
 @router.delete("/drafts")

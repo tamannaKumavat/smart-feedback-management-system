@@ -61,13 +61,13 @@ export default function Sidebar({ mode, onLogout }) {
   const adminItems = [
     {
       to: "/admin/dashboard",
-      label: "Overview",
+      label: t("admin.overview"),
       icon: <FiPieChart size={16} />,
     },
-    { to: "/admin/customers", label: "Customers", icon: <FiUsers size={16} /> },
+    { to: "/admin/customers", label: t("admin.customers"), icon: <FiUsers size={16} /> },
     {
       to: "/admin/activity-log",
-      label: "Activity Log",
+      label: t("admin.activityLog"),
       icon: <FiActivity size={16} />,
     },
   ];
@@ -91,7 +91,7 @@ export default function Sidebar({ mode, onLogout }) {
   ];
 
   const primaryItems = isClient ? clientItems : adminItems;
-  const menuTitle = isClient ? t("sidebar.menu") : "Menu";
+  const menuTitle = t("sidebar.menu");
 
   const asideClass =
     mode === "client"
@@ -115,7 +115,7 @@ export default function Sidebar({ mode, onLogout }) {
           }`}
         >
           <FiLogOut size={16} />
-          {isClient ? t("sidebar.logout") : "Logout"}
+          {t("sidebar.logout")}
         </button>
       </div>
     </aside>

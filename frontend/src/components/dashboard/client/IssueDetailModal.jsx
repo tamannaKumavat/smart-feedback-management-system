@@ -12,6 +12,11 @@ import {
   FiX,
   FiZap,
 } from "react-icons/fi";
+import { useTranslation } from "@/i18n/useTranslation.js";
+import {
+  TIMELINE_DETAIL_ALIASES,
+  localizeTableProp,
+} from "@/i18n/clientDashboard.js";
 import MarkdownMessage from "../../MarkdownMessage.jsx";
 import { scaleIn } from "../../../lib/motion.js";
 import { getMessages } from "../../../lib/chatApi.js";
@@ -20,18 +25,18 @@ import { showError } from "../../../lib/toast.js";
 const TEAM_AVATAR = "/ruag-single.png";
 const USER_AVATAR = "/user.png";
 
-const TABS = [
-  { id: "general", label: "General", Icon: FiFileText },
-  { id: "teamResponse", label: "Team response", Icon: FiMessageSquare },
-  { id: "progress", label: "Progress", Icon: FiLayers },
-  { id: "chatHistory", label: "Chat history", Icon: FiMessageCircle },
+const TAB_CONFIG = [
+  { id: "general", Icon: FiFileText },
+  { id: "teamResponse", Icon: FiMessageSquare },
+  { id: "progress", Icon: FiLayers },
+  { id: "chatHistory", Icon: FiMessageCircle },
 ];
 
 const PHASE_DEFS = [
-  { key: "created", label: "Created", Icon: FiEdit3 },
-  { key: "classified", label: "Classified", Icon: FiLayers },
-  { key: "inProgress", label: "In Progress", Icon: FiZap },
-  { key: "resolved", label: "Resolved", Icon: FiCheck },
+  { key: "created", Icon: FiEdit3 },
+  { key: "classified", Icon: FiLayers },
+  { key: "inProgress", Icon: FiZap },
+  { key: "resolved", Icon: FiCheck },
 ];
 
 const PHASE_BADGE = {
@@ -42,16 +47,30 @@ const PHASE_BADGE = {
 };
 
 const PHASE_LABEL = {
-  created: "Created",
-  classified: "Classified",
-  inProgress: "In Progress",
-  resolved: "Resolved",
+  created: "historyTable.phases.created",
+  classified: "historyTable.phases.classified",
+  inProgress: "historyTable.phases.inProgress",
+  resolved: "historyTable.phases.resolved",
 };
+
+const PHASE_DEFAULT_DETAIL = {
+  created: "historyTable.timeline.issueCreated",
+  classified: "historyTable.timeline.issueClassified",
+  inProgress: "historyTable.timeline.issueInProgress",
+  resolved: "historyTable.timeline.issueResolved",
+};
+
+function timelineDetailText(stepKey, entry, t) {
+  if (entry?.detail) {
+    return localizeTableProp(t, entry.detail, TIMELINE_DETAIL_ALIASES);
+  }
+  return t(PHASE_DEFAULT_DETAIL[stepKey]);
+}
 
 const scrollPretty =
   "[scrollbar-width:thin] [scrollbar-color:rgb(100_116_139/0.45)_transparent] [&::-webkit-scrollbar]:w-[6px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border-input/60 hover:[&::-webkit-scrollbar-thumb]:bg-content-muted/50";
 
-const TAB_IDS = TABS.map((t) => t.id);
+const TAB_IDS = TAB_CONFIG.map((tab) => tab.id);
 
 const springTab = { type: "spring", stiffness: 420, damping: 32 };
 
@@ -176,7 +195,7 @@ function VerticalStepIcon({ step, i, activeIndex }) {
   );
 }
 
-function VerticalTimeline({ phase, timeline = {} }) {
+function VerticalTimeline({ phase, timeline = {}, t }) {
   const activeIndex = phaseIndex(phase ?? "created");
 
   return (
@@ -249,7 +268,7 @@ function VerticalTimeline({ phase, timeline = {} }) {
                       aria-hidden
                     />
                     <h4 className="client-timeline-title text-[14px] font-bold">
-                      {step.label}
+                      {t(PHASE_LABEL[step.key])}
                     </h4>
                   </div>
                   {current ? (
@@ -258,12 +277,12 @@ function VerticalTimeline({ phase, timeline = {} }) {
                       animate={{ scale: 1, opacity: 1 }}
                       className="inline-flex shrink-0 items-center rounded-full bg-[var(--client-accent)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm"
                     >
-                      Current
+                      {t("issueDetail.current")}
                     </motion.span>
                   ) : completed ? (
                     <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-emerald-600">
                       <FiCheck className="text-[12px]" aria-hidden />
-                      Done
+                      {t("issueDetail.done")}
                     </span>
                   ) : null}
                 </div>
@@ -279,7 +298,7 @@ function VerticalTimeline({ phase, timeline = {} }) {
                     current ? "text-content" : "text-content-muted"
                   }`}
                 >
-                  {entry?.detail ?? "—"}
+                  {timelineDetailText(step.key, entry, t)}
                 </p>
               </motion.div>
             </motion.div>
@@ -304,7 +323,7 @@ function EmptyState({ icon: Icon, title, description }) {
   );
 }
 
-function ChatMessage({ msg }) {
+function ChatMessage({ msg, t }) {
   const isUser = msg.sender === "user";
   const time = formatTime(msg.createdAt);
   const bubbleUser =
@@ -329,7 +348,7 @@ function ChatMessage({ msg }) {
           }`}
         >
           <span className="font-semibold text-dashboard-heading">
-            {isUser ? "You" : "Ruag Team"}
+            {isUser ? t("common.you") : t("common.ruagTeam")}
           </span>
           {time ? <span className="text-content-muted"> · {time}</span> : null}
         </p>
@@ -341,7 +360,7 @@ function ChatMessage({ msg }) {
           <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-border-subtle bg-surface-card">
             <img
               src={isUser ? USER_AVATAR : TEAM_AVATAR}
-              alt={isUser ? "You" : "Ruag Team"}
+              alt={isUser ? t("common.you") : t("common.ruagTeam")}
               className="h-full w-full object-cover"
             />
           </div>
@@ -358,28 +377,29 @@ function ChatMessage({ msg }) {
   );
 }
 
-function TabBar({ activeTab, onChange, badges }) {
+function TabBar({ activeTab, onChange, badges, t }) {
   const activeIndex = Math.max(
     0,
-    TABS.findIndex((t) => t.id === activeTab),
+    TAB_CONFIG.findIndex((tab) => tab.id === activeTab),
   );
 
   return (
     <div
       className="client-separator shrink-0 px-3 py-3 sm:px-5 sm:py-3.5"
       role="tablist"
-      aria-label="Issue details"
+      aria-label={t("issueDetail.tabsAria")}
     >
       <div className="relative rounded-2xl bg-surface-muted/70 p-1.5 ring-1 ring-border-subtle/80">
         <motion.div
           className="pointer-events-none absolute inset-y-1.5 rounded-xl bg-surface-card shadow-[0_4px_14px_-2px_rgba(15,23,42,0.12)] ring-1 ring-border-subtle"
-          style={{ width: `calc((100% - 0.5rem) / ${TABS.length})` }}
-          animate={{ left: `calc(0.25rem + ((100% - 0.5rem) / ${TABS.length}) * ${activeIndex})` }}
+          style={{ width: `calc((100% - 0.5rem) / ${TAB_CONFIG.length})` }}
+          animate={{ left: `calc(0.25rem + ((100% - 0.5rem) / ${TAB_CONFIG.length}) * ${activeIndex})` }}
           transition={springTab}
           aria-hidden
         />
         <div className={`relative flex gap-1 overflow-x-auto ${scrollPretty}`}>
-          {TABS.map(({ id, label, Icon }) => {
+          {TAB_CONFIG.map(({ id, Icon }) => {
+            const label = t(`issueDetail.tabs.${id}`);
             const selected = activeTab === id;
             const badge = badges[id];
             return (
@@ -464,16 +484,17 @@ function TabPanel({ tabKey, direction, children, ...a11y }) {
 }
 
 export default function IssueDetailModal({ open, row, onClose, onExited }) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState("general");
   const [messages, setMessages] = useState([]);
   const [loadingChat, setLoadingChat] = useState(false);
   const prevTabRef = useRef("general");
   const slideDirection = tabDirection(prevTabRef.current, activeTab);
 
-  const title = row?.ticket ?? row?.feedback ?? "Issue";
+  const title = row?.ticket ?? row?.feedback ?? t("issueDetail.fallbackTitle");
   const description = row?.description ?? title;
   const phase = row?.timelinePhase ?? "created";
-  const phaseLabel = PHASE_LABEL[phase] ?? PHASE_LABEL.created;
+  const phaseLabel = t(PHASE_LABEL[phase] ?? PHASE_LABEL.created);
   const phaseBadge = PHASE_BADGE[phase] ?? PHASE_BADGE.created;
   const teamReply = teamResponseFromRow(row);
   const showShot = Boolean(row?.hasScreenshot);
@@ -510,7 +531,7 @@ export default function IssueDetailModal({ open, row, onClose, onExited }) {
         const data = await getMessages(row.id);
         if (!cancelled) setMessages(data.messages || []);
       } catch (err) {
-        if (!cancelled) showError(err, "Could not load conversation");
+        if (!cancelled) showError(err, t("issueDetail.loadError"));
       } finally {
         if (!cancelled) setLoadingChat(false);
       }
@@ -563,7 +584,7 @@ export default function IssueDetailModal({ open, row, onClose, onExited }) {
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-xl border border-border-subtle bg-surface-muted/40 px-4 py-3">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-content-muted">
-                  Status
+                  {t("issueDetail.status")}
                 </p>
                 <p className="mt-1 text-[14px] font-semibold text-content">
                   {phaseLabel}
@@ -571,7 +592,7 @@ export default function IssueDetailModal({ open, row, onClose, onExited }) {
               </div>
               <div className="rounded-xl border border-border-subtle bg-surface-muted/40 px-4 py-3">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-content-muted">
-                  Created
+                  {t("issueDetail.created")}
                 </p>
                 <p className="mt-1 text-[14px] font-semibold text-content">
                   {row?.date ?? "—"}
@@ -586,10 +607,10 @@ export default function IssueDetailModal({ open, row, onClose, onExited }) {
                 </span>
                 <div>
                   <h3 className="text-[14px] font-semibold text-dashboard-heading">
-                    Description
+                    {t("issueDetail.description")}
                   </h3>
                   <p className="text-[12px] text-content-muted">
-                    What you reported
+                    {t("issueDetail.descriptionSubtitle")}
                   </p>
                 </div>
               </div>
@@ -629,16 +650,16 @@ export default function IssueDetailModal({ open, row, onClose, onExited }) {
                   <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full border-2 border-surface-card shadow-sm ring-2 ring-[var(--client-accent)]/20">
                     <img
                       src={TEAM_AVATAR}
-                      alt="Ruag Team"
+                      alt={t("common.ruagTeam")}
                       className="h-full w-full object-cover"
                     />
                   </div>
                   <div>
                     <p className="text-[14px] font-semibold text-dashboard-heading">
-                      Ruag Team
+                      {t("common.ruagTeam")}
                     </p>
                     <p className="text-[12px] text-content-muted">
-                      Support response
+                      {t("issueDetail.supportResponse")}
                       {teamReply.at
                         ? ` · ${formatResponseTime(teamReply.at)}`
                         : ""}
@@ -652,8 +673,8 @@ export default function IssueDetailModal({ open, row, onClose, onExited }) {
             ) : (
               <EmptyState
                 icon={FiMessageSquare}
-                title="No team response yet"
-                description="When the Ruag support team replies to your issue, their message will appear here."
+                title={t("issueDetail.noTeamResponseTitle")}
+                description={t("issueDetail.noTeamResponseBody")}
               />
             )}
           </TabPanel>
@@ -675,22 +696,22 @@ export default function IssueDetailModal({ open, row, onClose, onExited }) {
             >
               <div>
                 <h3 className="text-[15px] font-bold text-dashboard-heading">
-                  Ticket lifecycle
+                  {t("issueDetail.lifecycleTitle")}
                 </h3>
                 <p className="mt-1 text-[13px] text-content-muted">
-                  Track how your issue moves from creation to resolution
+                  {t("issueDetail.lifecycleSubtitle")}
                 </p>
               </div>
               <div className="hidden shrink-0 rounded-xl border border-border-subtle bg-surface-muted/50 px-4 py-2 text-right sm:block">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-content-muted">
-                  Current stage
+                  {t("issueDetail.currentStage")}
                 </p>
                 <p className="mt-0.5 text-[14px] font-bold text-[var(--client-accent)]">
                   {phaseLabel}
                 </p>
               </div>
             </motion.div>
-            <VerticalTimeline phase={phase} timeline={row?.timeline ?? {}} />
+            <VerticalTimeline phase={phase} timeline={row?.timeline ?? {}} t={t} />
           </TabPanel>
         );
 
@@ -710,19 +731,19 @@ export default function IssueDetailModal({ open, row, onClose, onExited }) {
                 <div className="flex flex-col items-center gap-3 py-12">
                   <div className="h-9 w-9 animate-spin rounded-full border-2 border-[var(--client-accent)] border-t-transparent" />
                   <p className="text-[13px] text-content-muted">
-                    Loading chat history…
+                    {t("issueDetail.loadingChat")}
                   </p>
                 </div>
               ) : messages.length === 0 ? (
                 <EmptyState
                   icon={FiMessageCircle}
-                  title="No messages yet"
-                  description="Your conversation with the assistant will appear here once you start chatting about this issue."
+                  title={t("issueDetail.noMessagesTitle")}
+                  description={t("issueDetail.noMessagesBody")}
                 />
               ) : (
                 <div className="space-y-5">
                   {messages.map((msg) => (
-                    <ChatMessage key={msg.id} msg={msg} />
+                    <ChatMessage key={msg.id} msg={msg} t={t} />
                   ))}
                 </div>
               )}
@@ -754,7 +775,7 @@ export default function IssueDetailModal({ open, row, onClose, onExited }) {
           <button
             type="button"
             className="absolute inset-0 bg-slate-950/35 backdrop-blur-[3px]"
-            aria-label="Close issue details"
+            aria-label={t("issueDetail.closeOverlay")}
             onClick={onClose}
           />
           <motion.div
@@ -801,7 +822,7 @@ export default function IssueDetailModal({ open, row, onClose, onExited }) {
                   type="button"
                   onClick={onClose}
                   className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-surface-card text-content-muted shadow-sm transition hover:bg-surface-muted hover:text-content"
-                  aria-label="Close"
+                  aria-label={t("issueDetail.close")}
                 >
                   <FiX className="text-[18px]" />
                 </button>
@@ -812,6 +833,7 @@ export default function IssueDetailModal({ open, row, onClose, onExited }) {
               activeTab={activeTab}
               onChange={setActiveTab}
               badges={tabBadges}
+              t={t}
             />
 
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
