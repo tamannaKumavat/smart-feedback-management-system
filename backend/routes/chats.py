@@ -151,6 +151,15 @@ def list_drafts(
     return {"ok": True, "drafts": [_issue_dto(c) for c in drafts]}
 
 
+@router.delete("/drafts")
+def delete_all_drafts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    deleted = chat_service.delete_all_drafts(db, current_user.id)
+    return {"ok": True, "deleted": deleted}
+
+
 @router.get("/issues")
 def list_issues(
     db: Session = Depends(get_db),

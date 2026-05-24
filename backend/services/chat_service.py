@@ -73,6 +73,17 @@ def list_drafts(db: Session, user_id: str) -> list[Issue]:
     return list(db.execute(stmt).scalars())
 
 
+def delete_all_drafts(db: Session, user_id: str) -> int:
+    """Delete every draft issue for the user. Returns the number removed."""
+    drafts = list_drafts(db, user_id)
+    if not drafts:
+        return 0
+    for issue in drafts:
+        db.delete(issue)
+    db.commit()
+    return len(drafts)
+
+
 def list_issues(db: Session, user_id: str) -> list[Issue]:
     stmt = (
         select(Issue)

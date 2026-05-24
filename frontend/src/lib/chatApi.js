@@ -51,6 +51,14 @@ async function postJson(path, body) {
   return unwrap(res);
 }
 
+async function deleteJson(path) {
+  const res = await fetch(`${API_PREFIX}${path}`, {
+    method: "DELETE",
+    headers: { ...authHeaders() },
+  });
+  return unwrap(res);
+}
+
 export function createChat() {
   return postJson("/chats");
 }
@@ -65,6 +73,10 @@ export function confirmSummary(chatId, accepted) {
 
 export function listDrafts() {
   return getJson("/drafts");
+}
+
+export function deleteAllDrafts() {
+  return deleteJson("/drafts");
 }
 
 export function resumeChat(chatId) {
