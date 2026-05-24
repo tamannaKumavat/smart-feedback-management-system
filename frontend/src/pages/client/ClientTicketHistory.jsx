@@ -1,23 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "@/i18n/useTranslation.js";
 import PortalLayout from "../../layouts/PortalLayout.jsx";
 import TicketHistory from "../../components/dashboard/client/TicketHistory.jsx";
 import { listMyTickets } from "../../lib/chatApi.js";
 import { showError } from "../../lib/toast.js";
 
-const sortOptions = [
-  { value: "newest", label: "Newest" },
-  { value: "oldest", label: "Oldest" },
-];
-
-/**
- * Adapt a backend ticket payload to the shape the existing
- * ``<TicketHistory />`` component expects:
- *
- *   - ``threads``:        list-pane rows (id, name, subject, snippet…)
- *   - ``messagesByThread``: map of thread.id -> message rows for the
- *                           detail pane
- */
-function buildThreadsAndMessages(tickets) {
+function buildThreadsAndMessages(tickets, t) {
   const threads = [];
   const messagesByThread = {};
 
@@ -28,11 +16,20 @@ function buildThreadsAndMessages(tickets) {
     const created = ticket.createdAt ? new Date(ticket.createdAt) : null;
     const subject = firstUser?.content
       ? firstUser.content.split("\n")[0].slice(0, 80)
-      : "Support ticket";
+      : t("ticketList.supportTicket");
     const snippet = (lastMsg?.content || ticket.summary || "").slice(0, 140);
     const hasAttachment = messages.some(
       (m) => Array.isArray(m.attachments) && m.attachments.length > 0,
     );
+    const statusLine =
+      messages.length === 1
+        ? t("ticketList.statusLineOne", {
+            status: ticket.status,
+          })
+        : t("ticketList.statusLine", {
+            status: ticket.status,
+            count: messages.length,
+          });
 
     threads.push({
       id: ticket.id,
@@ -43,7 +40,7 @@ function buildThreadsAndMessages(tickets) {
       snippet,
       timeAgo: created ? created.toLocaleDateString() : "",
       date: created ? created.toLocaleString() : "",
-      statusLine: `Ticket ${ticket.status} · ${messages.length} message${messages.length === 1 ? "" : "s"}`,
+      statusLine,
       category: ticket.status,
       unread: 0,
       starred: false,
@@ -62,7 +59,7 @@ function buildThreadsAndMessages(tickets) {
       const firstAttachment = m.attachments?.[0];
       return {
         id: m.id,
-        sender: outgoing ? "You" : "Ruag team",
+        sender: outgoing ? t("common.you") : t("common.ruagTeam"),
         outgoing,
         time,
         type: "text",
@@ -76,8 +73,17 @@ function buildThreadsAndMessages(tickets) {
 }
 
 export default function ClientTicketHistory() {
+  const { t } = useTranslation();
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const sortOptions = useMemo(
+    () => [
+      { value: "newest", label: t("ticketList.newest") },
+      { value: "oldest", label: t("ticketList.oldest") },
+    ],
+    [t],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -87,7 +93,7 @@ export default function ClientTicketHistory() {
         const data = await listMyTickets();
         if (!cancelled) setTickets(data.tickets || []);
       } catch (err) {
-        if (!cancelled) showError(err, "Could not load tickets");
+        if (!cancelled) showError(err, t("ticketList.loadError"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -96,11 +102,11 @@ export default function ClientTicketHistory() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   const { threads, messagesByThread } = useMemo(
-    () => buildThreadsAndMessages(tickets),
-    [tickets],
+    () => buildThreadsAndMessages(tickets, t),
+    [tickets, t],
   );
 
   return (
@@ -109,16 +115,15 @@ export default function ClientTicketHistory() {
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {loading ? (
             <div className="flex flex-1 items-center justify-center text-[13px] text-content-muted">
-              Loading tickets…
+              {t("ticketList.loading")}
             </div>
           ) : threads.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
               <p className="text-[14px] font-semibold text-content">
-                No tickets yet
+                {t("ticketList.emptyTitle")}
               </p>
               <p className="max-w-[360px] text-[12px] text-content-muted">
-                When you confirm a ticket from a chat, it’ll appear here with
-                the full conversation.
+                {t("ticketList.emptyBody")}
               </p>
             </div>
           ) : (

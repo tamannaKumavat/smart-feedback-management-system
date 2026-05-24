@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import AuthLayout from '../../layouts/AuthLayout.jsx'
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useTranslation } from "@/i18n/useTranslation.js";
+import AuthLayout from "../../layouts/AuthLayout.jsx";
 import * as authApi from '../../lib/authApi.js'
 import PasswordToggleButton from '../../components/auth/PasswordToggleButton.jsx'
 import { showError, showSuccess } from '../../lib/toast.js'
@@ -14,7 +15,8 @@ const initialErrors = {
 }
 
 export default function SignUp() {
-  const navigate = useNavigate()
+  const { t } = useTranslation();
+  const navigate = useNavigate();
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -27,12 +29,14 @@ export default function SignUp() {
 
   function validate() {
     const next = { ...initialErrors }
-    if (!fullName.trim()) next.fullName = 'Full name is required'
-    if (!email.trim()) next.email = 'Email is required'
-    if (!password) next.password = 'Password is required'
-    if (password && !confirmPassword) next.confirmPassword = 'Please confirm your password'
-    else if (password && confirmPassword !== password) next.confirmPassword = 'Passwords do not match'
-    if (!agreeToTerms) next.terms = 'You must agree to continue'
+    if (!fullName.trim()) next.fullName = t("auth.signup.fullNameRequired");
+    if (!email.trim()) next.email = t("auth.signup.emailRequired");
+    if (!password) next.password = t("auth.signup.passwordRequired");
+    if (password && !confirmPassword)
+      next.confirmPassword = t("auth.signup.confirmRequired");
+    else if (password && confirmPassword !== password)
+      next.confirmPassword = t("auth.signup.passwordMismatch");
+    if (!agreeToTerms) next.terms = t("auth.signup.termsRequired");
     setErrors(next)
     return Object.values(next).every((v) => !v)
   }
@@ -49,21 +53,21 @@ export default function SignUp() {
         confirmPassword,
         agreeToTerms,
       })
-      showSuccess(response.message || 'Account created successfully.')
-      setTimeout(() => navigate('/login'), 700)
+      showSuccess(response.message || t("auth.signup.success"));
+      setTimeout(() => navigate("/login"), 700);
     } catch (err) {
-      showError(err, 'Sign up failed.')
+      showError(err, t("auth.signup.error"));
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <AuthLayout title="Create Account" subtitle="Sign up to get started">
+    <AuthLayout title={t("auth.signup.title")} subtitle={t("auth.signup.subtitle")}>
       <form onSubmit={handleSubmit} className="space-y-5" noValidate>
         <div>
           <label htmlFor="signup-name" className="auth-label">
-            Full Name
+            {t("auth.signup.fullName")}
           </label>
           <input
             id="signup-name"
@@ -87,7 +91,7 @@ export default function SignUp() {
 
         <div>
           <label htmlFor="signup-email" className="auth-label">
-            Email Address
+            {t("auth.signup.email")}
           </label>
           <input
             id="signup-email"
@@ -111,7 +115,7 @@ export default function SignUp() {
 
         <div>
           <label htmlFor="signup-password" className="auth-label">
-            Password
+            {t("auth.signup.password")}
           </label>
           <div className="relative">
             <input
@@ -142,7 +146,7 @@ export default function SignUp() {
 
         <div>
           <label htmlFor="signup-confirm" className="auth-label">
-            Confirm Password
+            {t("auth.signup.confirmPassword")}
           </label>
           <div className="relative">
             <input
@@ -183,13 +187,13 @@ export default function SignUp() {
               className="mt-0.5 h-4 w-4 shrink-0 rounded border-border-input accent-brand-gray focus:ring-brand-gray"
             />
             <span>
-              I agree to the{' '}
+              {t("auth.signup.termsPrefix")}{" "}
               <a href="#" className="auth-link" onClick={(e) => e.preventDefault()}>
-                Terms of Service
-              </a>{' '}
-              and{' '}
+                {t("auth.signup.termsLink")}
+              </a>{" "}
+              {t("auth.signup.and")}{" "}
               <a href="#" className="auth-link" onClick={(e) => e.preventDefault()}>
-                Privacy Policy
+                {t("auth.signup.privacyLink")}
               </a>
             </span>
           </label>
@@ -201,13 +205,13 @@ export default function SignUp() {
         </div>
 
         <button type="submit" className="auth-btn-primary" disabled={submitting}>
-          {submitting ? 'Creating account…' : 'Create Account'}
+          {submitting ? t("auth.signup.submitting") : t("auth.signup.submit")}
         </button>
 
         <p className="pt-2 text-center text-body-sm text-content-muted">
-          Already have an account?{' '}
+          {t("auth.signup.hasAccount")}{" "}
           <Link to="/login" className="auth-link">
-            Sign in
+            {t("auth.signup.signIn")}
           </Link>
         </p>
       </form>

@@ -227,6 +227,9 @@
     --client-btn-primary-bg: linear-gradient(135deg, #0a1f4d 0%, #020c3d 100%);
     --client-btn-primary-hover: #0a1a5c;
     --client-btn-primary-fg: #ffffff;
+    --client-status-badge-bg: rgb(219 234 254 / 0.65);
+    --client-status-badge-fg: #2563eb;
+    --client-status-badge-border: rgb(147 197 253 / 0.35);
     --client-stat-indigo-from: #e8ecff;
     --client-stat-indigo-via: #f1f4ff;
     --client-stat-indigo-to: #fafbff;
@@ -504,88 +507,93 @@
   }
 
   .client-portal[data-client-theme="dark"] {
-    --color-surface-page: #0b1018;
-    --color-surface-card: #141b26;
-    --color-surface-muted: #1a2332;
-    --color-border-subtle: rgb(71 85 105 / 0.45);
-    --color-border-input: rgb(100 116 139 / 0.55);
-    --color-content: #e8eef4;
-    --color-content-muted: #94a3b8;
-    --color-text-primary: #f8fafc;
-    --color-text-secondary: #cbd5e1;
-    --color-text-body: #94a3b8;
-    --color-text-label: #64748b;
-    --color-text-caption: #94a3b8;
-    --color-track: #243044;
-    --client-accent: #2dd4bf;
-    --client-accent-hover: #5eead4;
-    --client-chat-shell-bg: #141b26;
-    --client-chat-header-bg: #141b26;
-    --client-chat-footer-bg: #141b26;
-    --client-chat-area: #0f141c;
-    --client-chat-user-bg: #1e3a5f;
-    --client-chat-user-fg: #e8f4fc;
-    --client-chat-user-ring: rgb(56 189 248 / 0.35);
-    --client-chat-ai-bg: #374151;
-    --client-chat-ai-fg: #f1f5f9;
-    --client-chat-ai-ring: rgb(71 85 105 / 0.6);
-    --client-timeline-bg: #1a2332;
-    --client-timeline-border: rgb(71 85 105 / 0.55);
-    --client-timeline-heading: #94a3b8;
-    --client-timeline-muted: #64748b;
-    --client-timeline-title: #e8eef4;
-    --client-timeline-track: #334155;
+    /* Charcoal analytics — neutral greys, vibrant data accents */
+    --color-surface-page: #0b0c0e;
+    --color-surface-card: #16171b;
+    --color-surface-muted: #1c1d22;
+    --color-border-subtle: #2a2c32;
+    --color-border-input: #35373f;
+    --color-content: #e8e8ea;
+    --color-content-muted: #888890;
+    --color-text-primary: #ffffff;
+    --color-text-secondary: #c4c4c8;
+    --color-text-body: #9a9aa3;
+    --color-text-label: #6e6e78;
+    --color-text-caption: #888890;
+    --color-track: #25262c;
+    --client-accent: #22d3ee;
+    --client-accent-hover: #67e8f9;
+    --client-ring-soft: rgb(34 211 238 / 0.18);
+    --client-chat-shell-bg: #16171b;
+    --client-chat-header-bg: #16171b;
+    --client-chat-footer-bg: #16171b;
+    --client-chat-area: #0f1013;
+    --client-chat-user-bg: #1e293b;
+    --client-chat-user-fg: #e8e8ea;
+    --client-chat-user-ring: #2a2c32;
+    --client-chat-ai-bg: #222328;
+    --client-chat-ai-fg: #e8e8ea;
+    --client-chat-ai-ring: #2a2c32;
+    --client-status-badge-bg: rgb(34 211 238 / 0.12);
+    --client-status-badge-fg: #67e8f9;
+    --client-status-badge-border: rgb(34 211 238 / 0.28);
+    --client-timeline-bg: #16171b;
+    --client-timeline-border: #2a2c32;
+    --client-timeline-heading: #888890;
+    --client-timeline-muted: #6e6e78;
+    --client-timeline-title: #ffffff;
+    --client-timeline-track: #2a2c32;
     --client-timeline-track-active: #34d399;
     --client-timeline-done-border: #34d399;
-    --client-timeline-done-bg: rgb(6 95 70 / 0.45);
+    --client-timeline-done-bg: rgb(52 211 153 / 0.12);
     --client-timeline-done-fg: #6ee7b7;
-    --client-timeline-active-ring: #2dd4bf;
-    --client-timeline-active-bg: #14b8a6;
-    --client-timeline-pending-border: #334155;
-    --client-timeline-pending-bg: #1e293b;
-    --client-timeline-pending-fg: #64748b;
-    --client-timeline-ring-surface: #141b26;
-    --client-badge-created-bg: rgb(51 65 85 / 0.55);
-    --client-badge-created-fg: #cbd5e1;
-    --client-badge-classified-bg: rgb(120 53 15 / 0.45);
+    --client-timeline-active-ring: #22d3ee;
+    --client-timeline-active-bg: #06b6d4;
+    --client-timeline-pending-border: #2a2c32;
+    --client-timeline-pending-bg: #1c1d22;
+    --client-timeline-pending-fg: #6e6e78;
+    --client-timeline-ring-surface: #16171b;
+    --client-badge-created-bg: #25262c;
+    --client-badge-created-fg: #c4c4c8;
+    --client-badge-classified-bg: rgb(251 191 36 / 0.14);
     --client-badge-classified-fg: #fcd34d;
-    --client-badge-progress-bg: rgb(30 64 175 / 0.45);
-    --client-badge-progress-fg: #93c5fd;
-    --client-badge-resolved-bg: rgb(6 95 70 / 0.45);
+    --client-badge-progress-bg: rgb(34 211 238 / 0.14);
+    --client-badge-progress-fg: #67e8f9;
+    --client-badge-resolved-bg: rgb(52 211 153 / 0.14);
     --client-badge-resolved-fg: #6ee7b7;
-    --client-btn-primary-bg: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
-    --client-btn-primary-hover: #2dd4bf;
-    --client-btn-primary-fg: #0b1018;
-    --client-stat-indigo-from: rgb(67 56 202 / 0.55);
-    --client-stat-indigo-via: rgb(49 46 129 / 0.35);
-    --client-stat-indigo-to: rgb(20 27 38 / 0.9);
-    --client-stat-amber-from: rgb(180 83 9 / 0.5);
-    --client-stat-amber-via: rgb(120 53 15 / 0.3);
-    --client-stat-amber-to: rgb(20 27 38 / 0.9);
-    --client-stat-emerald-from: rgb(13 148 136 / 0.45);
-    --client-stat-emerald-via: rgb(6 78 59 / 0.28);
-    --client-stat-emerald-to: rgb(20 27 38 / 0.9);
-    --client-stat-sky-from: rgb(14 116 144 / 0.5);
-    --client-stat-sky-via: rgb(12 74 110 / 0.32);
-    --client-stat-sky-to: rgb(20 27 38 / 0.9);
-    --client-shadow-xs: 0 1px 2px rgb(0 0 0 / 0.35);
+    --client-btn-primary-bg: #ffffff;
+    --client-btn-primary-hover: #e8e8ea;
+    --client-btn-primary-fg: #0b0c0e;
+    --client-stat-indigo-from: rgb(99 102 241 / 0.18);
+    --client-stat-indigo-via: rgb(99 102 241 / 0.08);
+    --client-stat-indigo-to: #16171b;
+    --client-stat-amber-from: rgb(245 158 11 / 0.16);
+    --client-stat-amber-via: rgb(245 158 11 / 0.06);
+    --client-stat-amber-to: #16171b;
+    --client-stat-emerald-from: rgb(52 211 153 / 0.16);
+    --client-stat-emerald-via: rgb(52 211 153 / 0.06);
+    --client-stat-emerald-to: #16171b;
+    --client-stat-sky-from: rgb(34 211 238 / 0.16);
+    --client-stat-sky-via: rgb(34 211 238 / 0.06);
+    --client-stat-sky-to: #16171b;
+    --client-shadow-xs: 0 1px 2px rgb(0 0 0 / 0.5);
     --client-shadow-sm:
-      0 2px 8px -2px rgb(0 0 0 / 0.45), 0 0 0 1px rgb(255 255 255 / 0.04);
+      0 2px 8px -2px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.04);
     --client-shadow-md:
-      0 4px 16px -4px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.05);
+      0 4px 24px -6px rgb(0 0 0 / 0.65), 0 0 0 1px rgb(255 255 255 / 0.05);
     --client-shadow-lg:
-      0 8px 28px -8px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.06);
+      0 8px 32px -8px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.06);
     --shadow-card: var(--client-shadow-md);
     --shadow-card-soft: var(--client-shadow-sm);
   }
 
   .client-portal[data-client-theme="dark"] {
-    background: linear-gradient(165deg, #0b1018 0%, #0f1520 45%, #121a28 100%);
+    background: #0b0c0e;
   }
 
   .client-portal[data-client-theme="dark"] .client-main-panel {
-    background: linear-gradient(180deg, #141b26 0%, #121820 100%);
-    border: 1px solid rgb(71 85 105 / 0.4);
+    background: #0f1013;
+    border: 1px solid #2a2c32;
     box-shadow: var(--client-shadow-lg);
   }
 
@@ -599,42 +607,290 @@
 
   .client-portal[data-client-theme="dark"] .client-chat-shell {
     background: var(--client-chat-shell-bg);
-    border: 1px solid rgb(71 85 105 / 0.5);
+    border: 1px solid #2a2c32;
     border-radius: 1rem;
     box-shadow: var(--client-shadow-lg);
   }
 
   .client-portal[data-client-theme="dark"] .client-chat-composer {
-    border: 1px solid rgb(71 85 105 / 0.55);
-    background: #1a2332;
+    border: 1px solid #35373f;
+    background: #1c1d22;
     box-shadow: var(--client-shadow-sm);
+  }
+
+  .client-portal[data-client-theme="dark"] .client-chat-composer:focus-within {
+    border-color: rgb(34 211 238 / 0.45);
+    box-shadow:
+      0 0 0 3px rgb(34 211 238 / 0.1),
+      var(--client-shadow-sm);
   }
 
   .client-portal[data-client-theme="dark"] .client-topbar {
-    border: 1px solid rgb(71 85 105 / 0.45);
-    background: rgb(20 27 38 / 0.9);
+    border: 1px solid #2a2c32;
+    border-radius: 1rem;
+    margin: 0.75rem 0.75rem 0;
+    background: #16171b;
+    backdrop-filter: blur(12px) saturate(1.1);
     box-shadow: var(--client-shadow-sm);
   }
 
+  @media (min-width: 640px) {
+    .client-portal[data-client-theme="dark"] .client-topbar {
+      margin: 1rem 1rem 0;
+    }
+  }
+
   .client-portal[data-client-theme="dark"] .client-sidebar {
-    background: rgb(20 27 38 / 0.75);
-    border: 1px solid rgb(71 85 105 / 0.35);
+    background: #08090b;
+    border: 1px solid #2a2c32;
+    border-radius: 1rem;
     box-shadow: var(--client-shadow-sm);
   }
 
   .client-portal[data-client-theme="dark"] .client-card {
-    border: 1px solid rgb(71 85 105 / 0.4);
+    border: 1px solid #2a2c32;
+    background: #16171b;
     box-shadow: var(--client-shadow-md);
+    transition:
+      box-shadow 0.22s ease,
+      border-color 0.22s ease;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-card:hover {
+    border-color: #35373f;
+    box-shadow: var(--client-shadow-lg);
+  }
+
+  .client-portal[data-client-theme="dark"] .client-stat-card {
+    border: 1px solid #2a2c32;
+    border-radius: 0.875rem;
+    background-color: #16171b;
+    box-shadow: var(--client-shadow-sm);
+    transition:
+      box-shadow 0.22s ease,
+      border-color 0.22s ease;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-stat-card:hover {
+    border-color: #35373f;
+    box-shadow: var(--client-shadow-md);
+    transform: translateY(-2px);
+  }
+
+  .client-portal[data-client-theme="dark"] .client-stat-icon {
+    background: #1c1d22;
+    border: 1px solid #2a2c32;
+    box-shadow: none;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-stat-card--indigo .client-stat-icon {
+    color: #818cf8;
+    box-shadow: 0 0 16px -4px rgb(129 140 248 / 0.45);
+  }
+
+  .client-portal[data-client-theme="dark"] .client-stat-card--amber .client-stat-icon {
+    color: #fbbf24;
+    box-shadow: 0 0 16px -4px rgb(251 191 36 / 0.4);
+  }
+
+  .client-portal[data-client-theme="dark"] .client-stat-card--emerald .client-stat-icon {
+    color: #34d399;
+    box-shadow: 0 0 16px -4px rgb(52 211 153 / 0.4);
+  }
+
+  .client-portal[data-client-theme="dark"] .client-stat-card--sky .client-stat-icon {
+    color: #22d3ee;
+    box-shadow: 0 0 16px -4px rgb(34 211 238 / 0.4);
+  }
+
+  .client-portal[data-client-theme="dark"] .client-stat-card--indigo :is(svg, .font-semibold) {
+    color: #818cf8;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-stat-card--amber :is(svg, .font-semibold) {
+    color: #fbbf24;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-stat-card--emerald :is(svg, .font-semibold) {
+    color: #34d399;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-stat-card--sky :is(svg, .font-semibold) {
+    color: #22d3ee;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-nav-link--active {
+    color: #ffffff;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-btn-primary {
+    border: 1px solid #ffffff;
+    box-shadow: none;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-btn-primary:hover {
+    background: #e8e8ea;
+    box-shadow: 0 0 20px -4px rgb(255 255 255 / 0.25);
+    transform: translateY(-0.5px);
+  }
+
+  .client-portal[data-client-theme="dark"] .client-btn-secondary {
+    border: 1px solid #35373f;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-btn-secondary:hover {
+    background: #1c1d22;
+    border-color: #454750;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-input,
+  .client-portal[data-client-theme="dark"] .client-search-field {
+    background: #1c1d22;
+    border-color: #35373f;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-input:focus,
+  .client-portal[data-client-theme="dark"] .client-search-field:focus-within {
+    border-color: rgb(34 211 238 / 0.45);
+    box-shadow:
+      0 0 0 3px rgb(34 211 238 / 0.1),
+      var(--client-shadow-xs);
+  }
+
+  .client-portal[data-client-theme="dark"] .client-theme-toggle {
+    border: 1px solid #35373f;
+    background: #1c1d22;
+    color: #e8e8ea;
+    box-shadow: none;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-theme-toggle:hover {
+    background: #25262c;
+    border-color: #454750;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-nav-link:hover {
+    background: #1c1d22;
+    box-shadow: none;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-nav-link--active {
+    border-color: #2a2c32;
+    background: #1c1d22;
+    box-shadow: none;
+    color: #ffffff;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-nav-icon {
+    border: 1px solid #2a2c32;
+    background: #16171b;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-row-hover:hover {
+    background: #1c1d22;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-chat-prompt-btn {
+    border-color: #35373f;
+    background: #1c1d22;
+    color: var(--color-content);
+  }
+
+  .client-portal[data-client-theme="dark"] .client-chat-prompt-btn:hover {
+    border-color: #454750;
+    background: #25262c;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-chat-header {
+    border-bottom-color: #2a2c32;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-chat-footer {
+    border-top-color: #2a2c32;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-empty-icon {
+    background: #1c1d22;
+    color: #888890;
+    border: 1px solid #2a2c32;
+  }
+
+  .client-portal[data-client-theme="dark"] .markdown-message code {
+    background: #25262c;
+    color: #e8e8ea;
+    border: 1px solid #2a2c32;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-typing-bubble {
+    background: linear-gradient(
+      90deg,
+      #222328 0%,
+      #2a2c32 50%,
+      #222328 100%
+    );
+  }
+
+  .client-portal[data-client-theme="dark"] .client-skeleton {
+    background: linear-gradient(
+      90deg,
+      #1c1d22 0%,
+      #25262c 50%,
+      #1c1d22 100%
+    );
+    background-size: 200% 100%;
   }
 
   .client-portal[data-client-theme="dark"] .client-separator {
     border: none;
-    box-shadow: 0 1px 0 rgb(71 85 105 / 0.45);
+    box-shadow: 0 1px 0 #2a2c32;
   }
 
   .client-portal[data-client-theme="dark"] .client-separator-t {
     border: none;
-    box-shadow: 0 -1px 0 rgb(71 85 105 / 0.45);
+    box-shadow: 0 -1px 0 #2a2c32;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-chat-header-btn {
+    border-color: #35373f;
+    background: transparent;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-chat-header-btn:hover {
+    background: #1c1d22;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-chat-header-btn--primary {
+    border: 1px solid #ffffff;
+    background: #ffffff;
+    color: #0b0c0e;
+    box-shadow: none;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-chat-send-btn {
+    background: #ffffff;
+    color: #0b0c0e;
+    box-shadow: 0 0 16px -4px rgb(255 255 255 / 0.2);
+  }
+
+  .client-portal[data-client-theme="dark"] .client-btn-option {
+    background-color: #ffffff;
+    color: #0b0c0e;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-btn-option:hover {
+    background-color: #e8e8ea;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-btn-option-muted {
+    border-color: #35373f;
+    background: transparent;
+    color: #e8e8ea;
+  }
+
+  .client-portal[data-client-theme="dark"] .client-btn-option-muted:hover {
+    background: #1c1d22;
   }
 
   .client-portal[data-client-theme="dark"] .client-ticket-timeline {
@@ -671,16 +927,6 @@
     animation: client-shimmer 1.6s ease-in-out infinite;
   }
 
-  .client-portal[data-client-theme="dark"] .client-skeleton {
-    background: linear-gradient(
-      90deg,
-      rgb(51 65 85 / 0.45) 0%,
-      rgb(71 85 105 / 0.75) 50%,
-      rgb(51 65 85 / 0.45) 100%
-    );
-    background-size: 200% 100%;
-  }
-
   .client-portal .client-chat-shell {
     @apply mx-auto flex h-full min-h-0 w-full max-w-[1120px] flex-col overflow-hidden rounded-2xl;
     background: var(--client-chat-shell-bg);
@@ -702,9 +948,9 @@
 
   .client-portal .client-chat-status-badge {
     @apply rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide;
-    background: rgb(219 234 254 / 0.65);
-    color: #2563eb;
-    border: 1px solid rgb(147 197 253 / 0.35);
+    background: var(--client-status-badge-bg, rgb(219 234 254 / 0.65));
+    color: var(--client-status-badge-fg, #2563eb);
+    border: 1px solid var(--client-status-badge-border, rgb(147 197 253 / 0.35));
   }
 
   .client-portal .client-chat-header-btn {
@@ -712,8 +958,9 @@
   }
 
   .client-portal .client-chat-header-btn--primary {
-    @apply border-transparent text-white;
-    background: linear-gradient(135deg, #0a1f4d 0%, #020c3d 100%);
+    @apply border-transparent;
+    background: var(--client-btn-primary-bg);
+    color: var(--client-btn-primary-fg, #ffffff);
     box-shadow: 0 1px 2px rgb(2 12 61 / 0.2);
   }
 
@@ -745,7 +992,7 @@
   }
 
   .client-portal .client-chat-composer {
-    @apply mx-auto flex w-full max-w-[1000px] items-center gap-2 rounded-[22px] border border-border-subtle bg-white px-3 py-2 transition-shadow duration-200;
+    @apply mx-auto flex w-full max-w-[1000px] items-center gap-2 rounded-[22px] border border-border-subtle bg-surface-card px-3 py-2 transition-shadow duration-200;
     box-shadow:
       0 1px 2px rgb(15 23 42 / 0.04),
       0 4px 12px -4px rgb(15 23 42 / 0.06);
@@ -763,12 +1010,13 @@
   }
 
   .client-portal .client-chat-composer-icon {
-    @apply inline-flex h-9 w-9 items-center justify-center rounded-full text-content-muted transition hover:bg-white hover:text-content disabled:opacity-40;
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-full text-content-muted transition hover:bg-surface-muted hover:text-content disabled:opacity-40;
   }
 
   .client-portal .client-chat-send-btn {
-    @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white transition hover:scale-[1.03] active:scale-[0.98] disabled:opacity-40;
-    background: linear-gradient(135deg, #0a1f4d 0%, #020c3d 100%);
+    @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition hover:scale-[1.03] active:scale-[0.98] disabled:opacity-40;
+    background: var(--client-btn-primary-bg);
+    color: var(--client-btn-primary-fg, #ffffff);
     box-shadow: 0 2px 6px -1px rgb(2 12 61 / 0.35);
   }
 
@@ -777,7 +1025,7 @@
   }
 
   .client-portal .client-chat-prompt-btn {
-    @apply rounded-full border border-border-subtle bg-white px-3.5 py-2 text-left text-[13px] text-content shadow-sm transition hover:bg-surface-muted;
+    @apply rounded-full border border-border-subtle bg-surface-card px-3.5 py-2 text-left text-[13px] text-content shadow-sm transition hover:bg-surface-muted;
   }
 
   .client-portal .client-chat-prompt-btn:hover {

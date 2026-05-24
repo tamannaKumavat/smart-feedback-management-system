@@ -11,7 +11,7 @@ function IconButton({ children, hasDot = false, className = "", onClick, ariaLab
       type="button"
       onClick={onClick}
       aria-label={ariaLabel}
-      className={`relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-card text-content-muted transition hover:bg-surface-muted hover:text-content ${className}`}
+      className={`client-topbar-icon-btn relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-surface-muted text-content-muted transition hover:bg-surface-card hover:text-content ${className}`}
     >
       {children}
       {hasDot ? (
@@ -71,16 +71,14 @@ export default function Topbar({
 
   const portalTitle = isClient
     ? t("topbar.clientPortal")
-    : "Admin Portal";
-  const searchPlaceholder = isClient
-    ? t("topbar.searchPlaceholder")
-    : "Search anything...";
+    : t("topbar.adminPortal");
+  const searchPlaceholder = t("topbar.searchPlaceholder");
 
   return (
     <header
       className={`sticky top-0 z-20 backdrop-blur ${
         isClient
-          ? `client-topbar ${isDark ? "border-b border-border-subtle bg-surface-card/95" : "border-0"}`
+          ? "client-topbar border-0"
           : "admin-topbar"
       }`}
     >
@@ -93,7 +91,7 @@ export default function Topbar({
         </Link>
 
         <div className="hidden max-w-[480px] flex-1 lg:flex">
-          <div className="flex h-11 w-full items-center gap-3 rounded-2xl bg-surface-muted px-4">
+          <div className="flex h-11 w-full items-center gap-3 rounded-2xl border border-border-subtle bg-surface-muted px-4">
             <FiSearch className="text-content-muted" />
             <input
               type="text"
@@ -118,18 +116,15 @@ export default function Topbar({
               />
             </>
           ) : null}
-          <IconButton ariaLabel={isClient ? t("topbar.settings") : "Settings"}>
+          {/* <IconButton ariaLabel={t("topbar.settings")}>
             <FiSettings size={16} />
           </IconButton>
-          <IconButton
-            hasDot
-            ariaLabel={isClient ? t("topbar.notifications") : "Notifications"}
-          >
+          <IconButton hasDot ariaLabel={t("topbar.notifications")}>
             <FiBell size={16} />
           </IconButton>
-          <IconButton ariaLabel={isClient ? t("topbar.share") : "Share"}>
+          <IconButton ariaLabel={t("topbar.share")}>
             <FiShare2 size={16} />
-          </IconButton>
+          </IconButton> */}
           <span className="ml-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-gray text-captionsmall font-semibold text-white">
             {avatarText}
           </span>
