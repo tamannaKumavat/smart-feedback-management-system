@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
+  FiArrowLeft,
   FiEdit3,
   FiMoreHorizontal,
   FiPaperclip,
@@ -12,6 +13,7 @@ import {
 import { IoTicketOutline } from "react-icons/io5";
 import { useTranslation } from "@/i18n/useTranslation.js";
 import MarkdownMessage from "../../MarkdownMessage.jsx";
+import { useMediaQuery } from "../../../lib/useMediaQuery.js";
 import {
   confirmationFollowUp,
   getTicketHistoryMessagesForThread,
@@ -116,12 +118,21 @@ export default function TicketHistory({
   sortOptions = [],
 }) {
   const { t } = useTranslation();
+  const isMobileLayout = useMediaQuery("(max-width: 1023px)");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState(sortOptions[0]?.value ?? "newest");
   const [activeId, setActiveId] = useState(threads[0]?.id ?? "");
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [confirmationChoice, setConfirmationChoice] = useState({});
   const [replyByThread, setReplyByThread] = useState({});
   const [sentFromComposer, setSentFromComposer] = useState({});
+
+  useEffect(() => {
+    if (!isMobileLayout) setMobileDetailOpen(false);
+  }, [isMobileLayout]);
+
+  const showThreadList = !isMobileLayout || !mobileDetailOpen;
+  const showThreadDetail = !isMobileLayout || mobileDetailOpen;
 
   const filteredThreads = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -202,7 +213,7 @@ export default function TicketHistory({
   return (
     <div className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden bg-surface-card md:flex-row">
       <aside
-        className={`flex max-h-[min(42vh,320px)] min-h-0 w-full min-w-0 shrink-0 flex-col bg-surface-card md:max-h-none md:w-[min(100%,380px)] md:border-r ${hairline} lg:w-[360px] lg:max-w-[360px]`}
+        className={`${showThreadList ? "flex" : "hidden"} max-h-none min-h-0 w-full min-w-0 shrink-0 flex-col bg-surface-card md:flex md:max-h-none md:w-[min(100%,380px)] md:border-r lg:w-[360px] lg:max-w-[360px] ${hairline}`}
       >
         <div
           className="client-separator flex shrink-0 items-center justify-between gap-2 px-4 py-3"
@@ -251,7 +262,10 @@ export default function TicketHistory({
                   <li key={thread.id}>
                     <button
                       type="button"
-                      onClick={() => setActiveId(thread.id)}
+                      onClick={() => {
+                        setActiveId(thread.id);
+                        if (isMobileLayout) setMobileDetailOpen(true);
+                      }}
                       className={`flex w-full gap-3 px-3 py-3 text-left transition ${
                         selected
                           ? "bg-surface-muted shadow-[inset_3px_0_0_0_var(--client-accent)]"
@@ -300,13 +314,25 @@ export default function TicketHistory({
         </div>
       </aside>
 
-      <section className="flex min-w-0 flex-1 flex-col bg-surface-card">
+      <section
+        className={`${showThreadDetail ? "flex" : "hidden"} min-w-0 flex-1 flex-col bg-surface-card md:flex`}
+      >
         {active ? (
           <>
             <header
-              className="client-separator flex shrink-0 items-center justify-between gap-3 px-4 py-3 sm:px-5"
+              className="client-separator flex shrink-0 items-center justify-between gap-3 px-3 py-3 sm:px-5"
             >
-              <div className="flex min-w-0 items-center gap-3">
+              <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+                {isMobileLayout ? (
+                  <button
+                    type="button"
+                    onClick={() => setMobileDetailOpen(false)}
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-subtle bg-surface-card text-content-muted shadow-sm transition hover:border-border-input hover:text-content md:hidden"
+                    aria-label={t("common.back")}
+                  >
+                    <FiArrowLeft className="h-[18px] w-[18px]" strokeWidth={2} />
+                  </button>
+                ) : null}
                 <TicketAvatar title={active.name} size="lg" />
                 <div className="min-w-0">
                   <p className="truncate text-[15px] font-semibold text-content">

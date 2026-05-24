@@ -138,7 +138,7 @@ export default function ClientDrafts() {
                 {drafts.map((d) => (
                   <li
                     key={d.id}
-                    className="client-row-hover flex items-center justify-between gap-4 px-4 py-3 sm:px-5"
+                    className="client-row-hover flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-5"
                   >
                     <div className="min-w-0">
                       <p className="truncate text-[14px] font-semibold text-content">
@@ -153,7 +153,7 @@ export default function ClientDrafts() {
                     <button
                       type="button"
                       onClick={() => resume(d.id)}
-                      className="client-btn-secondary shrink-0 !py-1.5 !text-[12px]"
+                      className="client-btn-secondary w-full shrink-0 !py-2 !text-[12px] sm:w-auto sm:!py-1.5"
                     >
                       {t("drafts.resume")}
                       <FiArrowRight className="text-[13px]" />

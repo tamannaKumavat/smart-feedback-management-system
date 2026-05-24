@@ -36,7 +36,7 @@ export default function ClientStats({ stats = [] }) {
 
   return (
     <motion.div
-      className="grid w-full min-w-0 shrink-0 grid-cols-1 gap-4 min-[480px]:grid-cols-2 xl:grid-cols-4"
+      className="grid w-full min-w-0 shrink-0 grid-cols-2 gap-2 sm:gap-4 xl:grid-cols-4"
       variants={staggerContainer}
       initial="initial"
       animate="animate"

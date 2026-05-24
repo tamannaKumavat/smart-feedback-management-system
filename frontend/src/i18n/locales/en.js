@@ -29,6 +29,7 @@ export default {
     you: "You",
     ruagTeam: "Ruag Team",
     close: "Close",
+    back: "Back",
     search: "Search",
     more: "More",
     yes: "Yes",

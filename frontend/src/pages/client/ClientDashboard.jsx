@@ -151,10 +151,10 @@ export default function ClientDashboard() {
 
   return (
     <PortalLayout mode="client">
-      <section className="mx-auto flex h-full min-h-0 min-w-0 w-full max-w-[min(100%,1600px)] flex-col gap-6 overflow-hidden">
+      <section className="mx-auto flex h-full min-h-0 min-w-0 w-full max-w-[min(100%,1600px)] flex-col gap-2 overflow-hidden sm:gap-6">
         <ClientStats stats={stats} />
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="mt-3 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:mt-0">
           <AnimatePresence mode="wait">
             {loading ? (
               <motion.div

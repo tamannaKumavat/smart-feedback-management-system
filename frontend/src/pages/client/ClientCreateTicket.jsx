@@ -835,26 +835,26 @@ export default function ClientCreateTicket() {
 
   return (
     <PortalLayout mode="client">
-      <section className="mx-auto flex h-[calc(100dvh-6rem)] max-h-[calc(100dvh-6rem)] min-h-0 w-full max-w-[920px] flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
-        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/90 bg-white px-4 py-3 sm:px-5">
-          <div className="flex items-center gap-3">
-            <h1 className="text-[18px] font-semibold leading-tight text-[#0f172a] sm:text-[20px]">
+      <section className="mx-auto flex h-full min-h-0 w-full max-w-[920px] flex-col overflow-hidden rounded-none border-0 bg-white shadow-none md:rounded-xl md:border md:border-slate-200/80 md:shadow-sm">
+        <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200/90 bg-white px-3 py-2.5 sm:gap-3 sm:px-5 sm:py-3">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <h1 className="text-[17px] font-semibold leading-tight text-[#0f172a] sm:text-[20px]">
               Chat
             </h1>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
             <button
               type="button"
               onClick={handleShare}
-              className="inline-flex items-center gap-2 rounded-full border border-[#e5e7eb] bg-white px-4 py-2 text-[13px] font-medium text-[#111827] shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition hover:bg-slate-50"
+              className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-full border border-[#e5e7eb] bg-white px-3 py-2 text-[12px] font-medium text-[#111827] shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition hover:bg-slate-50 sm:h-auto sm:flex-none sm:px-4 sm:text-[13px]"
             >
               <FaRegShareFromSquare className="text-[14px]" aria-hidden />
-              Share
+              <span className="hidden xs:inline">Share</span>
             </button>
             <button
               type="button"
               onClick={handleNewChat}
-              className="rounded-full bg-[#020c3d] px-4 py-2 text-[13px] font-semibold text-white shadow-[0_1px_2px_rgba(16,24,40,0.18)] transition hover:bg-[#0a1a5c]"
+              className="inline-flex h-9 flex-1 items-center justify-center rounded-full bg-[#020c3d] px-3 py-2 text-[12px] font-semibold text-white shadow-[0_1px_2px_rgba(16,24,40,0.18)] transition hover:bg-[#0a1a5c] sm:h-auto sm:flex-none sm:px-4 sm:text-[13px]"
             >
               New Chat
             </button>
@@ -917,12 +917,12 @@ export default function ClientCreateTicket() {
               </span>
             </div>
           ) : null}
-          <div className="mx-auto flex max-w-[720px] items-center gap-1 rounded-2xl border border-[#e7e9ef] bg-white px-3 py-2 shadow-[0_1px_1px_rgba(16,24,40,0.04)]">
+          <div className="mx-auto flex max-w-[720px] items-center gap-0.5 rounded-2xl border border-[#e7e9ef] bg-white px-2 py-1.5 shadow-[0_1px_1px_rgba(16,24,40,0.04)] sm:gap-1 sm:px-3 sm:py-2">
             <button
               type="button"
               onClick={handleOpenFilePicker}
               disabled={inputDisabled}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-9 w-8 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:w-9"
               aria-label="Add attachment"
               title="Attach an image, PDF or text file"
             >
@@ -938,11 +938,11 @@ export default function ClientCreateTicket() {
               onChange={(e) => setMessageInput(e.target.value)}
               placeholder={uploading ? "Uploading attachment..." : "Write your message..."}
               disabled={inputDisabled}
-              className="min-h-[44px] min-w-0 flex-1 border-0 bg-transparent text-[15px] text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:ring-0 disabled:cursor-not-allowed"
+              className="min-h-[44px] min-w-0 flex-1 border-0 bg-transparent text-[14px] text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:ring-0 disabled:cursor-not-allowed sm:text-[15px]"
             />
             <button
               type="button"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#c2c8d3] transition hover:text-slate-600"
+              className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#c2c8d3] transition hover:text-slate-600 xs:inline-flex"
               aria-label="Emoji"
               disabled
             >
@@ -952,7 +952,7 @@ export default function ClientCreateTicket() {
               type="button"
               onClick={handleOpenFilePicker}
               disabled={inputDisabled}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#c2c8d3] transition hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-9 w-8 shrink-0 items-center justify-center rounded-full text-[#c2c8d3] transition hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-50 sm:w-9"
               aria-label="Attach file"
             >
               <FiPaperclip className="text-[17px]" />

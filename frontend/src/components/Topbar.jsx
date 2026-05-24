@@ -1,4 +1,4 @@
-import { FiBell, FiMoon, FiSearch, FiSettings, FiShare2, FiSun } from "react-icons/fi";
+import { FiBell, FiMenu, FiMoon, FiSearch, FiSettings, FiShare2, FiSun, FiX } from "react-icons/fi";
 import { Link } from "react-router-dom";
 import { ClientLanguageSwitcher } from "@/i18n";
 import { useTranslation } from "@/i18n/useTranslation.js";
@@ -29,17 +29,17 @@ function ThemeToggleButton({ isDark, onToggle, t }) {
       onClick={onToggle}
       title={label}
       aria-label={label}
-      className="client-theme-toggle inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[12px] font-medium shadow-sm transition"
+      className="client-theme-toggle inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border shadow-sm transition sm:w-auto sm:gap-1.5 sm:px-2.5"
     >
       {isDark ? (
         <>
           <FiSun className="text-[16px]" aria-hidden />
-          <span>{t("topbar.light")}</span>
+          <span className="hidden sm:inline">{t("topbar.light")}</span>
         </>
       ) : (
         <>
           <FiMoon className="text-[16px]" aria-hidden />
-          <span>{t("topbar.dark")}</span>
+          <span className="hidden sm:inline">{t("topbar.dark")}</span>
         </>
       )}
     </button>
@@ -51,6 +51,8 @@ export default function Topbar({
   showThemeToggle = false,
   isDark = false,
   onToggleTheme,
+  onMenuToggle,
+  menuOpen = false,
 }) {
   const { t } = useTranslation();
   const session = getSession();
@@ -82,13 +84,30 @@ export default function Topbar({
           : "admin-topbar"
       }`}
     >
-      <div className="mx-auto flex h-16 items-center justify-between gap-2 px-4 sm:gap-4 sm:px-6">
-        <Link to="/" className="inline-flex min-w-0 shrink items-center gap-3">
-          <WebLogo className="h-8 w-auto sm:h-10" />
-          <span className="hidden text-lg font-semibold text-content sm:inline">
-            {portalTitle}
-          </span>
-        </Link>
+      <div className="mx-auto flex h-12 max-w-full items-center justify-between gap-1.5 px-2 sm:h-16 sm:gap-4 sm:px-6">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-3">
+          {isClient && onMenuToggle ? (
+            <button
+              type="button"
+              onClick={onMenuToggle}
+              className="client-topbar-icon-btn inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-surface-muted text-content-muted transition hover:bg-surface-card hover:text-content md:hidden sm:h-9 sm:w-9"
+              aria-label={menuOpen ? t("common.close") : t("sidebar.menu")}
+              aria-expanded={menuOpen}
+            >
+              {menuOpen ? (
+                <FiX className="text-[17px]" aria-hidden />
+              ) : (
+                <FiMenu className="text-[17px]" aria-hidden />
+              )}
+            </button>
+          ) : null}
+          <Link to="/" className="inline-flex min-w-0 items-center gap-2 sm:gap-3">
+            <WebLogo className="h-7 w-auto sm:h-10" />
+            <span className="hidden truncate text-sm font-semibold text-content md:inline md:text-lg">
+              {portalTitle}
+            </span>
+          </Link>
+        </div>
 
         <div className="hidden max-w-[480px] flex-1 lg:flex">
           <div className="flex h-11 w-full items-center gap-3 rounded-2xl border border-border-subtle bg-surface-muted px-4">
@@ -101,13 +120,13 @@ export default function Topbar({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           {isClient && showThemeToggle && onToggleTheme ? (
             <>
               <ClientLanguageSwitcher
                 id="topbar-language"
                 variant="topbar"
-                className="w-auto shrink-0"
+                className="shrink-0"
               />
               <ThemeToggleButton
                 isDark={isDark}
@@ -125,7 +144,7 @@ export default function Topbar({
           <IconButton ariaLabel={t("topbar.share")}>
             <FiShare2 size={16} />
           </IconButton> */}
-          <span className="ml-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-gray text-captionsmall font-semibold text-white">
+          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-gray text-[11px] font-semibold text-white sm:ml-0.5 sm:h-9 sm:w-9 sm:text-captionsmall">
             {avatarText}
           </span>
         </div>
