@@ -125,16 +125,21 @@ export default function ProjectHistoryTable({
 
   return (
     <motion.article
-      className="client-card flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden"
+      className="client-issues-panel flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden md:client-card"
       initial={fadeInUp.initial}
       animate={fadeInUp.animate}
       transition={{ ...fadeInUp.transition, delay: 0.08 }}
     >
       {localizedTitle ? (
-        <div className="client-separator flex min-w-0 shrink-0 flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-4 sm:py-3.5">
-          <h2 className="min-w-0 shrink-0 text-[15px] font-bold leading-tight text-dashboard-heading sm:text-[16px] lg:text-[17px]">
-            {localizedTitle}
-          </h2>
+        <div className="client-issues-toolbar client-separator flex min-w-0 shrink-0 flex-col gap-3 px-1 py-3 sm:px-4 sm:py-3.5 md:flex-row md:items-center md:justify-between md:gap-4 md:px-4">
+          <div className="flex min-w-0 items-center justify-between gap-3 md:justify-start">
+            <h2 className="min-w-0 shrink-0 text-[16px] font-bold leading-tight tracking-tight text-dashboard-heading sm:text-[16px] lg:text-[17px]">
+              {localizedTitle}
+            </h2>
+            <span className="inline-flex shrink-0 items-center rounded-full bg-surface-muted px-2.5 py-0.5 text-[11px] font-semibold tabular-nums text-content-muted md:hidden">
+              {filteredRows.length}
+            </span>
+          </div>
           <div className="flex w-full min-w-0 flex-col gap-2 sm:max-w-[min(100%,32rem)] sm:flex-1 sm:flex-row sm:items-center sm:justify-end sm:gap-3">
             <label className="client-search-field flex h-10 min-w-0 w-full items-center gap-2.5 rounded-xl border border-border-input bg-surface-card px-3 shadow-sm sm:min-w-0 sm:flex-1 sm:basis-0">
               <FiSearch
@@ -173,7 +178,7 @@ export default function ProjectHistoryTable({
         </div>
       ) : null}
 
-      <div className="client-separator flex min-w-0 shrink-0 items-center gap-2 bg-surface-muted px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-content-muted sm:gap-4 sm:px-4 sm:py-2.5 sm:text-[12px]">
+      <div className="client-separator hidden min-w-0 shrink-0 items-center gap-2 bg-surface-muted px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-content-muted md:flex sm:gap-4 sm:px-4 sm:py-2.5 sm:text-[12px]">
         <span className={`${ROW_DATE_W} flex min-h-[1.25rem] items-center`}>
           {localizedDateLabel}
         </span>
@@ -184,11 +189,12 @@ export default function ProjectHistoryTable({
         </div>
       </div>
 
-      <div className="client-divide min-h-0 flex-1 divide-y overflow-y-auto overscroll-contain">
+      <div className="client-issues-mobile-list min-h-0 flex-1 overflow-y-auto overscroll-contain px-0.5 pb-4 pt-4 md:p-0 md:pt-0">
+        <ul className="flex list-none flex-col gap-3 md:gap-0 md:divide-y md:divide-border-subtle client-divide">
         {filteredRows.length === 0 ? (
-          <p className="px-4 py-8 text-center text-[13px] text-content-muted">
+          <li className="px-2 py-10 text-center text-[13px] text-content-muted md:px-4">
             {t("historyTable.noTicketsMatch")}
-          </p>
+          </li>
         ) : (
           filteredRows.map((row, index) => {
             const rowTitle = row.ticket ?? row.feedback ?? "";
@@ -198,13 +204,17 @@ export default function ProjectHistoryTable({
             const hasTeamResponse = teamResponseFromRow(row);
             const { label: phaseLabel, badgeClass: phaseBadgeClass } =
               phaseRowStatus(phase, t);
+            const showDetailPreview =
+              detail.trim().toLowerCase() !== rowTitle.trim().toLowerCase();
+            const displayTitle = rowTitle || t("historyTable.fallbackTitle");
 
             return (
-              <div key={rowId} className="bg-surface-card">
+              <li key={rowId} className="md:bg-surface-card">
+                {/* Desktop / tablet table row */}
                 <button
                   type="button"
                   onClick={() => openDetail(row)}
-                  className="group flex w-full min-w-0 cursor-pointer items-center gap-2 border-0 px-3 py-4 text-left transition-colors hover:bg-surface-muted focus-visible:outline focus-visible:ring-2 focus-visible:ring-brand-gray/30 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-card sm:gap-4 sm:px-4 sm:py-4"
+                  className="group hidden w-full min-w-0 cursor-pointer items-center gap-2 border-0 px-3 py-4 text-left transition-colors hover:bg-surface-muted focus-visible:outline focus-visible:ring-2 focus-visible:ring-brand-gray/30 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-card md:flex sm:gap-4 sm:px-4 sm:py-4"
                 >
                   <span
                     className={`${ROW_DATE_W} flex min-h-0 items-center text-left text-[12px] text-content-muted sm:text-[13px]`}
@@ -245,10 +255,71 @@ export default function ProjectHistoryTable({
                     </div>
                   </div>
                 </button>
-              </div>
+
+                {/* Mobile card row */}
+                <button
+                  type="button"
+                  onClick={() => openDetail(row)}
+                  aria-label={`${displayTitle}, ${phaseLabel}, ${localizedActionLabel}`}
+                  className="client-issue-mobile-card group flex w-full flex-col text-left md:hidden"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[11px] font-semibold leading-none client-phase-badge ${phaseBadgeClass}`}
+                    >
+                      {phaseLabel}
+                    </span>
+                    <time
+                      dateTime={row.date}
+                      className="shrink-0 text-[11px] font-medium text-content-muted"
+                    >
+                      {row.date}
+                    </time>
+                  </div>
+
+                  <div className="relative mt-3 min-w-0">
+                    <div className="flex items-start gap-2">
+                      <p
+                        className="line-clamp-2 flex-1 text-[15px] font-semibold leading-snug tracking-tight text-content"
+                        title={displayTitle}
+                      >
+                        {displayTitle}
+                      </p>
+                      {hasTeamResponse ? (
+                        <span
+                          className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[var(--client-accent)] ring-2 ring-surface-card"
+                          title={t("historyTable.teamResponseAvailable")}
+                          aria-label={t("historyTable.teamResponseAvailable")}
+                        />
+                      ) : null}
+                    </div>
+                    {showDetailPreview ? (
+                      <p
+                        className="mt-1.5 line-clamp-2 text-[13px] leading-relaxed text-content-muted"
+                        title={detail}
+                      >
+                        {detail}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-3.5 flex min-h-[44px] items-center justify-between gap-3 border-t border-border-subtle/80 pt-3">
+                    <span className="text-[13px] font-medium text-[var(--client-accent)]">
+                      {localizedActionLabel}
+                    </span>
+                    <span
+                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-muted text-content-muted transition group-hover:bg-[var(--client-accent)]/10 group-hover:text-[var(--client-accent)]"
+                      aria-hidden
+                    >
+                      <FiChevronRight className="text-[17px]" />
+                    </span>
+                  </div>
+                </button>
+              </li>
             );
           })
         )}
+        </ul>
       </div>
 
       <IssueDetailModal

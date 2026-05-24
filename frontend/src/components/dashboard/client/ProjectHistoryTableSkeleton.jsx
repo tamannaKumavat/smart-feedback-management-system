@@ -29,7 +29,7 @@ function SkeletonRow({ index }) {
       className="bg-surface-card"
       aria-hidden
     >
-      <div className="flex w-full min-w-0 items-center gap-2 px-3 py-4 sm:gap-4 sm:px-4 sm:py-4">
+      <div className="hidden w-full min-w-0 items-center gap-2 px-3 py-4 md:flex sm:gap-4 sm:px-4 sm:py-4">
         <SkeletonBar className={`${ROW_DATE_W} h-4 rounded-md`} />
         <div className="flex min-w-0 flex-1 items-center">
           <SkeletonBar
@@ -46,6 +46,20 @@ function SkeletonRow({ index }) {
           </div>
         </div>
       </div>
+      <div className="flex flex-col gap-3 rounded-2xl border border-border-subtle bg-surface-card p-4 md:hidden">
+        <div className="flex items-center justify-between gap-3">
+          <SkeletonBar className="h-5 w-16 rounded-full" />
+          <SkeletonBar className="h-3 w-20 rounded-md" />
+        </div>
+        <div className="space-y-2">
+          <SkeletonBar className="h-[15px] max-w-full rounded-md" style={{ width: titleWidth }} />
+          <SkeletonBar className="h-3 w-[62%] rounded-md" />
+        </div>
+        <div className="flex min-h-[44px] items-center justify-between border-t border-border-subtle/80 pt-3">
+          <SkeletonBar className="h-3 w-20 rounded-md" />
+          <SkeletonBar className="h-8 w-8 rounded-full" />
+        </div>
+      </div>
     </motion.div>
   );
 }
@@ -59,7 +73,7 @@ export default function ProjectHistoryTableSkeleton({
 }) {
   return (
     <article
-      className="client-card relative flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden"
+      className="client-issues-panel relative flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden md:client-card"
       aria-busy="true"
       aria-label="Loading issues"
     >
@@ -85,7 +99,7 @@ export default function ProjectHistoryTableSkeleton({
         </div>
       ) : null}
 
-      <div className="client-separator flex min-w-0 shrink-0 items-center gap-2 bg-surface-muted px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-content-muted/70 sm:gap-4 sm:px-4 sm:py-2.5 sm:text-[12px]">
+      <div className="client-separator hidden min-w-0 shrink-0 items-center gap-2 bg-surface-muted px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-content-muted/70 md:flex sm:gap-4 sm:px-4 sm:py-2.5 sm:text-[12px]">
         <span className={`${ROW_DATE_W} flex min-h-[1.25rem] items-center`}>
           {dateLabel}
         </span>
@@ -97,14 +111,16 @@ export default function ProjectHistoryTableSkeleton({
       </div>
 
       <motion.div
-        className="client-divide min-h-0 flex-1 divide-y overflow-hidden"
+        className="client-issues-mobile-list min-h-0 flex-1 overflow-hidden px-0.5 pb-4 pt-4 md:p-0 md:pt-0"
         variants={staggerContainer}
         initial="initial"
         animate="animate"
       >
+        <div className="flex flex-col gap-3 md:gap-0 md:divide-y md:divide-border-subtle client-divide">
         {Array.from({ length: SKELETON_ROWS }, (_, index) => (
           <SkeletonRow key={index} index={index} />
         ))}
+        </div>
       </motion.div>
 
       <p className="sr-only">Loading issues…</p>

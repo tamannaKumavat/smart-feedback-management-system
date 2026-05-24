@@ -24,7 +24,7 @@ function itemClassName({ isActive }, mode) {
   }`;
 }
 
-function SidebarSection({ title, items, mode }) {
+function SidebarSection({ title, items, mode, onNavClick }) {
   return (
     <div className={mode === "client" ? "mt-3" : "mt-6"}>
       <p className="mb-2 px-3 text-extrasmall font-medium uppercase tracking-wide text-content-muted/70">
@@ -35,6 +35,7 @@ function SidebarSection({ title, items, mode }) {
           <NavLink
             key={item.to}
             to={item.to}
+            onClick={onNavClick}
             className={(state) => itemClassName(state, mode)}
           >
             <span
@@ -54,7 +55,7 @@ function SidebarSection({ title, items, mode }) {
   );
 }
 
-export default function Sidebar({ mode, onLogout }) {
+export default function Sidebar({ mode, onLogout, onNavClick }) {
   const { t } = useTranslation();
   const isClient = mode === "client";
 
@@ -102,7 +103,12 @@ export default function Sidebar({ mode, onLogout }) {
     <aside className={asideClass}>
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1">
-          <SidebarSection title={menuTitle} items={primaryItems} mode={mode} />
+          <SidebarSection
+            title={menuTitle}
+            items={primaryItems}
+            mode={mode}
+            onNavClick={onNavClick}
+          />
         </div>
 
         <button
