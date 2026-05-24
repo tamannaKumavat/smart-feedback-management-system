@@ -1,3 +1,5 @@
+import { useTranslation } from "@/i18n/useTranslation.js";
+
 function EyeIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
@@ -54,12 +56,13 @@ function EyeSlashIcon() {
 }
 
 export default function PasswordToggleButton({ isVisible, onClick, controlsId }) {
+  const { t } = useTranslation();
   return (
     <button
       type="button"
       className="absolute inset-y-0 right-3 flex items-center text-content-muted hover:text-content"
       onClick={onClick}
-      aria-label={isVisible ? 'Hide password' : 'Show password'}
+      aria-label={isVisible ? t("auth.hidePassword") : t("auth.showPassword")}
       aria-controls={controlsId}
     >
       {isVisible ? <EyeSlashIcon /> : <EyeIcon />}

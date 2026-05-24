@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaRegShareFromSquare } from "react-icons/fa6";
 import { FiPaperclip, FiPlus, FiSend, FiSmile, FiX } from "react-icons/fi";
+import { useTranslation } from "@/i18n/useTranslation.js";
 import MarkdownMessage from "../../components/MarkdownMessage.jsx";
 import PortalLayout from "../../layouts/PortalLayout.jsx";
 import {
@@ -36,12 +37,7 @@ function formatBytes(n) {
 const userAvatar = "/user.png";
 const teamAvatar = "/ruag-single.png";
 
-const SUGGESTED_PROMPTS = [
-  "I can't log in to my account",
-  "I need help drafting a support ticket",
-  "Something is broken in production",
-  "Can you summarize my issue for me?",
-];
+const SUGGESTED_PROMPT_KEYS = ["login", "draftHelp", "production", "summarize"];
 
 const btnYes = "client-btn-option";
 const btnNo = "client-btn-option-muted";
@@ -143,7 +139,7 @@ function formatChatStatus(status) {
   return String(status || "active").replace(/_/g, " ");
 }
 
-function TypingIndicator() {
+function TypingIndicator({ teamLabel }) {
   return (
     <motion.div
       className="client-chat-row client-chat-row--team flex w-full"
@@ -152,10 +148,10 @@ function TypingIndicator() {
       transition={{ duration: 0.2 }}
     >
       <div className="client-assistant-block">
-        <Avatar src={teamAvatar} label="Ruag Team" />
+        <Avatar src={teamAvatar} label={teamLabel} />
         <div className="client-assistant-col">
           <p className="client-chat-meta">
-            <strong>Ruag Team</strong>
+            <strong>{teamLabel}</strong>
           </p>
           <div className="client-typing-bubble mt-2">
             <span className="client-typing-dots inline-flex gap-1.5">
@@ -171,9 +167,8 @@ function TypingIndicator() {
 }
 
 
-const GREETING_MSG = { id: "ai-greeting", sender: "ai", content: "How can I help you with today?", aiAnswerType: "normal", createdAt: new Date().toISOString() };
-
 export default function ClientCreateTicket() {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const resumeId = searchParams.get("chatId");
@@ -229,7 +224,7 @@ export default function ClientCreateTicket() {
         setStreamingDraft(null);
       } catch (err) {
         if (cancelled) return;
-        showError(err, "Could not resume chat");
+        showError(err, t("createTicket.resumeError"));
         setSearchParams({}, { replace: true });
       }
     }
@@ -263,7 +258,23 @@ export default function ClientCreateTicket() {
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages, streamingDraft]);
 
-  const displayMessages = resumeId ? messages : [GREETING_MSG, ...messages];
+  const greetingMsg = useMemo(
+    () => ({
+      id: "ai-greeting",
+      sender: "ai",
+      content: t("createTicket.greeting"),
+      aiAnswerType: "normal",
+      createdAt: new Date().toISOString(),
+    }),
+    [t],
+  );
+
+  const suggestedPrompts = useMemo(
+    () => SUGGESTED_PROMPT_KEYS.map((key) => t(`createTicket.prompts.${key}`)),
+    [t],
+  );
+
+  const displayMessages = resumeId ? messages : [greetingMsg, ...messages];
 
   const latestSummaryId = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -281,13 +292,13 @@ export default function ClientCreateTicket() {
   }, [messages]);
 
   const conversationTitle = useMemo(() => {
-    if (!chat) return "New conversation";
+    if (!chat) return t("createTicket.newConversation");
     const summary = chat.summary?.trim();
     if (summary) {
       return summary.length > 52 ? `${summary.slice(0, 52)}…` : summary;
     }
-    return "Support conversation";
-  }, [chat]);
+    return t("createTicket.supportConversation");
+  }, [chat, t]);
 
   const awaitingConfirmation = chat?.status === "waiting_confirmation";
   const awaitingOptionChoice = (pendingOptions?.options?.length ?? 0) > 0;
@@ -389,11 +400,11 @@ export default function ClientCreateTicket() {
       streamingContentRef.current = "";
       setStreamingDraft(null);
       setPendingOptions(null);
-      appendAiMessage(data.content ?? "Your ticket has been created.", {
+      appendAiMessage(data.content ?? t("createTicket.ticketCreatedMsg"), {
         ticketId: data.ticket_id ?? data.ticketId ?? null,
         aiAnswerType: "ticket_created",
       });
-      showSuccess("Ticket created");
+      showSuccess(t("createTicket.ticketCreated"));
       setSending(false);
       return;
     }
@@ -435,7 +446,7 @@ export default function ClientCreateTicket() {
     };
     ws.onerror = () => {
       if (!closingRef.current) {
-        showError("WebSocket connection error");
+        showError(t("createTicket.wsError"));
         setSending(false);
         setStreamingDraft(null);
       }
@@ -456,9 +467,7 @@ export default function ClientCreateTicket() {
     event.target.value = "";
     if (!file) return;
     if (!isAllowedMime(file.type)) {
-      showError(
-        "Only images, PDFs and text files are supported as attachments.",
-      );
+      showError(t("createTicket.attachmentTypeError"));
       return;
     }
     if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
@@ -473,15 +482,15 @@ export default function ClientCreateTicket() {
     const trimmed = messageInput.trim();
     if ((!trimmed && !pendingFile) || sending) return;
     if (chatClosed) {
-      showError("This chat is closed. Start a new one.");
+      showError(t("createTicket.closedError"));
       return;
     }
     if (awaitingConfirmation) {
-      showError("Please confirm or reject the summary above first.");
+      showError(t("createTicket.confirmFirst"));
       return;
     }
     if (awaitingOptionChoice) {
-      showError("Please choose one of the options above to continue.");
+      showError(t("createTicket.chooseOption"));
       return;
     }
 
@@ -496,7 +505,7 @@ export default function ClientCreateTicket() {
       activeChat = await ensureChat();
     } catch (err) {
       setSending(false);
-      showError(err, "Could not start chat");
+      showError(err, t("createTicket.startError"));
       return;
     }
 
@@ -512,7 +521,7 @@ export default function ClientCreateTicket() {
       } catch (err) {
         setUploading(false);
         setSending(false);
-        showError(err, "Upload failed");
+        showError(err, t("createTicket.uploadError"));
         setPendingFile(fileToSend);
         return;
       } finally {
@@ -550,7 +559,7 @@ export default function ClientCreateTicket() {
   async function handleOptionChoice(option) {
     if (!option || sending || !pendingOptions) return;
     if (chatClosed) {
-      showError("This chat is closed. Start a new one.");
+      showError(t("createTicket.closedError"));
       return;
     }
 
@@ -562,7 +571,7 @@ export default function ClientCreateTicket() {
       activeChat = activeChat ?? (await ensureChat());
     } catch (err) {
       setSending(false);
-      showError(err, "Could not start chat");
+      showError(err, t("createTicket.startError"));
       return;
     }
 
@@ -585,7 +594,7 @@ export default function ClientCreateTicket() {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(wsPayload);
     } else {
-      showError("Connection lost. Please try again.");
+      showError(t("createTicket.connectionLost"));
       setSending(false);
       setStreamingDraft(null);
     }
@@ -598,15 +607,14 @@ export default function ClientCreateTicket() {
       const result = await confirmSummary(chat.id, accepted);
       setChat(result.chat);
       if (accepted && result.ticket) {
-        showSuccess("Ticket created");
+        showSuccess(t("createTicket.ticketCreated"));
         setMessages((prev) => [
           ...prev,
           {
             id: `local-${Date.now()}`,
             chatId: chat.id,
             sender: "ai",
-            content:
-              "Thank you for confirming. Your ticket is now in progress. You can follow the status on your dashboard.",
+            content: t("createTicket.confirmedMsg"),
             aiAnswerType: "normal",
             createdAt: new Date().toISOString(),
           },
@@ -618,15 +626,14 @@ export default function ClientCreateTicket() {
             id: `local-${Date.now()}`,
             chatId: chat.id,
             sender: "ai",
-            content:
-              "No problem. Tell me what we should change and I’ll update the summary.",
+            content: t("createTicket.rejectedMsg"),
             aiAnswerType: "normal",
             createdAt: new Date().toISOString(),
           },
         ]);
       }
     } catch (err) {
-      showError(err, "Could not record your choice");
+      showError(err, t("createTicket.choiceError"));
     } finally {
       setConfirming(false);
     }
@@ -655,7 +662,7 @@ export default function ClientCreateTicket() {
       navigator.share({ title: conversationTitle, url }).catch(() => {});
     } else if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(url);
-      showSuccess("Link copied");
+      showSuccess(t("createTicket.linkCopied"));
     }
   }
 
@@ -688,13 +695,13 @@ export default function ClientCreateTicket() {
           </p>
           <div className="mt-3 rounded-xl border border-border-subtle bg-surface-muted p-3">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-content-muted">
-              Summary
+              {t("common.summary")}
             </p>
             <MarkdownMessage className="mt-1.5 leading-relaxed">
               {msg.content}
             </MarkdownMessage>
           </div>
-          <p className="mt-3">Do you confirm this is correct?</p>
+          <p className="mt-3">{t("ticketHistory.confirmQuestion")}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
@@ -702,7 +709,7 @@ export default function ClientCreateTicket() {
               onClick={() => handleConfirm(false)}
               disabled={confirming}
             >
-              No
+              {t("common.no")}
             </button>
             <button
               type="button"
@@ -710,7 +717,7 @@ export default function ClientCreateTicket() {
               onClick={() => handleConfirm(true)}
               disabled={confirming}
             >
-              Yes
+              {t("common.yes")}
             </button>
           </div>
         </>
@@ -774,10 +781,10 @@ export default function ClientCreateTicket() {
           {...messageBubble}
         >
           <div className="client-assistant-block">
-            <Avatar src={teamAvatar} label="Ruag Team" />
+            <Avatar src={teamAvatar} label={t("common.ruagTeam")} />
             <div className="client-assistant-col">
               <p className="client-chat-meta">
-                <strong>Ruag Team</strong>
+                <strong>{t("common.ruagTeam")}</strong>
                 {time ? <> · {time}</> : null}
               </p>
               <div className="client-chat-bubble-team mt-1.5 whitespace-pre-wrap">
@@ -798,14 +805,14 @@ export default function ClientCreateTicket() {
       >
         <div className="client-chat-user-col">
           <p className="client-chat-meta text-right">
-            <strong>You</strong>
+            <strong>{t("common.you")}</strong>
             {time ? <> · {time}</> : null}
           </p>
           <div className="flex items-end gap-2.5">
             <div className="client-chat-bubble-user min-w-0 whitespace-pre-wrap">
               {renderMessageBody(msg, true)}
             </div>
-            <Avatar src={userAvatar} label="You" />
+            <Avatar src={userAvatar} label={t("common.you")} />
           </div>
         </div>
       </motion.div>
@@ -815,7 +822,7 @@ export default function ClientCreateTicket() {
   function renderStreaming() {
     if (!streamingDraft) return null;
     if (!streamingDraft.content?.trim()) {
-      return <TypingIndicator />;
+      return <TypingIndicator teamLabel={t("common.ruagTeam")} />;
     }
 
     const time = formatTime(new Date().toISOString());
@@ -842,13 +849,13 @@ export default function ClientCreateTicket() {
 
   const placeholderText = chat
     ? chatClosed
-      ? "This chat is closed. Click ‘New Chat’ to start another."
+      ? t("createTicket.placeholderClosed")
       : awaitingConfirmation
-        ? "Please answer Yes or No above to continue."
+        ? t("createTicket.placeholderConfirm")
         : awaitingOptionChoice
-          ? "Please choose one of the options above to continue."
-          : "Write your message..."
-    : "Describe your issue to start a new chat...";
+          ? t("createTicket.placeholderOption")
+          : t("createTicket.placeholderWrite")
+    : t("createTicket.placeholderStart");
 
   const inputDisabled =
     sending || chatClosed || awaitingConfirmation || awaitingOptionChoice;
@@ -871,23 +878,23 @@ export default function ClientCreateTicket() {
               onClick={() => navigate("/client/drafts")}
               className="client-chat-header-btn hidden sm:inline-flex"
             >
-              Drafts
+              {t("createTicket.drafts")}
             </button>
             <button
               type="button"
               onClick={handleShare}
               className="client-chat-header-btn"
-              aria-label="Share conversation"
+              aria-label={t("createTicket.shareAria")}
             >
               <FaRegShareFromSquare className="text-[13px]" aria-hidden />
-              <span className="hidden sm:inline">Share</span>
+              <span className="hidden sm:inline">{t("createTicket.share")}</span>
             </button>
             <button
               type="button"
               onClick={handleNewChat}
               className="client-chat-header-btn client-chat-header-btn--primary"
             >
-              New Chat
+              {t("createTicket.newChat")}
             </button>
           </div>
         </header>
@@ -900,7 +907,7 @@ export default function ClientCreateTicket() {
                 className="mt-1 grid gap-2 sm:grid-cols-2"
                 {...fadeInUp}
               >
-                {SUGGESTED_PROMPTS.map((prompt) => (
+                {suggestedPrompts.map((prompt) => (
                   <button
                     key={prompt}
                     type="button"
@@ -937,7 +944,7 @@ export default function ClientCreateTicket() {
                   type="button"
                   onClick={() => setPendingFile(null)}
                   className="text-content-muted hover:text-content"
-                  aria-label="Remove attachment"
+                  aria-label={t("createTicket.removeAttachment")}
                 >
                   <FiX className="h-3.5 w-3.5" />
                 </button>
@@ -950,13 +957,13 @@ export default function ClientCreateTicket() {
               onClick={handleOpenFilePicker}
               disabled={inputDisabled}
               className="client-chat-composer-icon"
-              aria-label="Add attachment"
-              title="Attach an image, PDF or text file"
+              aria-label={t("createTicket.addAttachment")}
+              title={t("createTicket.attachTitle")}
             >
               <FiPlus className="h-5 w-5" strokeWidth={2} />
             </button>
             <label className="sr-only" htmlFor="create-ticket-message">
-              Write your message
+              {t("createTicket.writeMessage")}
             </label>
             <input
               ref={messageInputRef}
@@ -965,7 +972,7 @@ export default function ClientCreateTicket() {
               value={messageInput}
               onChange={(e) => setMessageInput(e.target.value)}
               placeholder={
-                uploading ? "Uploading attachment..." : placeholderText
+                uploading ? t("createTicket.uploading") : placeholderText
               }
               disabled={inputDisabled}
               className="min-h-[46px] min-w-0 flex-1 border-0 bg-transparent px-1 text-[15px] text-content placeholder:text-content-muted focus:outline-none focus:ring-0 disabled:cursor-not-allowed"
@@ -974,7 +981,7 @@ export default function ClientCreateTicket() {
               <button
                 type="button"
                 className="client-chat-composer-icon"
-                aria-label="Emoji"
+                aria-label={t("createTicket.emoji")}
                 disabled
               >
                 <FiSmile className="text-[17px]" />
@@ -984,7 +991,7 @@ export default function ClientCreateTicket() {
                 onClick={handleOpenFilePicker}
                 disabled={inputDisabled}
                 className="client-chat-composer-icon"
-                aria-label="Attach file"
+                aria-label={t("createTicket.attachFile")}
               >
                 <FiPaperclip className="text-[17px]" />
               </button>
@@ -994,7 +1001,7 @@ export default function ClientCreateTicket() {
                   inputDisabled || (!messageInput.trim() && !pendingFile)
                 }
                 className="client-chat-send-btn"
-                aria-label="Send message"
+                aria-label={t("createTicket.sendMessage")}
               >
                 <FiSend className="text-[17px]" />
               </button>

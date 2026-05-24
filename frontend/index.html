@@ -12,6 +12,15 @@
     <link rel="icon" type="image/png" href="/ruag-no-bg.png" />
     <link rel="apple-touch-icon" href="/ruag-no-bg.png" />
     <title>Smart Feedback Management System</title>
+    <script>
+      try {
+        var theme = localStorage.getItem("ruag-client-theme");
+        if (theme === "dark") {
+          document.documentElement.style.colorScheme = "dark";
+          document.documentElement.dataset.clientTheme = "dark";
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

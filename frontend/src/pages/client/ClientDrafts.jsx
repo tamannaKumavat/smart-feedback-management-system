@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FiClock, FiPlus, FiArrowRight } from "react-icons/fi";
+import { useTranslation } from "@/i18n/useTranslation.js";
 import PortalLayout from "../../layouts/PortalLayout.jsx";
 import { listDrafts } from "../../lib/chatApi.js";
 import { showError } from "../../lib/toast.js";
@@ -22,9 +23,16 @@ function formatDateTime(iso) {
 }
 
 export default function ClientDrafts() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [drafts, setDrafts] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  function draftTitle(draft) {
+    const text = String(draft.firstMessage ?? "").trim();
+    if (!text) return t("drafts.fallbackTitle");
+    return text.split("\n")[0].slice(0, 120);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -34,7 +42,7 @@ export default function ClientDrafts() {
         const data = await listDrafts();
         if (!cancelled) setDrafts(data.drafts || []);
       } catch (err) {
-        if (!cancelled) showError(err, "Could not load drafts");
+        if (!cancelled) showError(err, t("drafts.loadError"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -43,7 +51,7 @@ export default function ClientDrafts() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   function resume(chatId) {
     navigate(`/client/create-ticket?chatId=${chatId}`);
@@ -54,11 +62,8 @@ export default function ClientDrafts() {
       <section className="mx-auto w-full max-w-[920px]">
         <header className="mb-4 flex items-center justify-between gap-3">
           <div>
-            <h1 className="client-page-title">Draft tickets</h1>
-            <p className="client-page-subtitle">
-              Conversations you started but didn’t finalize. Resume any to pick
-              up where you left off.
-            </p>
+            <h1 className="client-page-title">{t("drafts.title")}</h1>
+            <p className="client-page-subtitle">{t("drafts.subtitle")}</p>
           </div>
           <button
             type="button"
@@ -66,14 +71,14 @@ export default function ClientDrafts() {
             className="client-btn-primary"
           >
             <FiPlus className="text-[14px]" />
-            New chat
+            {t("drafts.newChat")}
           </button>
         </header>
 
         <div className="client-card overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center py-16 text-[13px] text-content-muted">
-              Loading drafts…
+              {t("drafts.loading")}
             </div>
           ) : drafts.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
@@ -81,11 +86,10 @@ export default function ClientDrafts() {
                 <FiClock className="text-[20px]" />
               </div>
               <p className="text-[14px] font-semibold text-content">
-                No drafts yet
+                {t("drafts.emptyTitle")}
               </p>
               <p className="max-w-[320px] text-[12px] text-content-muted">
-                When you leave a chat before confirming the ticket, it’ll show
-                up here so you can finish it later.
+                {t("drafts.emptyBody")}
               </p>
             </div>
           ) : (
@@ -97,13 +101,12 @@ export default function ClientDrafts() {
                 >
                   <div className="min-w-0">
                     <p className="truncate text-[14px] font-semibold text-content">
-                      Draft chat
-                      <span className="ml-2 text-[11px] font-normal uppercase tracking-wide text-content-muted">
-                        {d.id.slice(0, 8)}
-                      </span>
+                      {draftTitle(d)}
                     </p>
                     <p className="mt-0.5 text-[12px] text-content-muted">
-                      Last activity {formatDateTime(d.updatedAt)}
+                      {t("drafts.lastActivity", {
+                        date: formatDateTime(d.updatedAt),
+                      })}
                     </p>
                   </div>
                   <button
@@ -111,7 +114,7 @@ export default function ClientDrafts() {
                     onClick={() => resume(d.id)}
                     className="client-btn-secondary shrink-0 !py-1.5 !text-[12px]"
                   >
-                    Resume
+                    {t("drafts.resume")}
                     <FiArrowRight className="text-[13px]" />
                   </button>
                 </li>

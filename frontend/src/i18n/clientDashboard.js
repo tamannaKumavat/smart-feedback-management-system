@@ -15,11 +15,14 @@ export const TABLE_LABEL_ALIASES = {
   Title: "historyTable.title",
   Status: "historyTable.status",
   "View history": "historyTable.viewHistory",
+  "View details": "historyTable.viewDetails",
   "Search tickets...": "historyTable.searchTickets",
 };
 
 export const TIMELINE_DETAIL_ALIASES = {
   "Issue created": "historyTable.timeline.issueCreated",
+  "Issue classified": "historyTable.timeline.issueClassified",
+  "Issue in progress": "historyTable.timeline.issueInProgress",
   "Issue resolved": "historyTable.timeline.issueResolved",
 };
 
