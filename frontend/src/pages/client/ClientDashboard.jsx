@@ -29,13 +29,16 @@ function formatDate(value) {
 }
 
 function issueDescription(issue) {
-  const summary = String(issue.summary ?? "").trim();
-  if (summary) return summary;
-  return String(issue.firstMessage ?? "").trim();
+  const firstMessage = String(issue.firstMessage ?? "").trim();
+  if (firstMessage) return firstMessage;
+  return String(issue.summary ?? "").trim();
 }
 
 function issueRowTitle(issue) {
-  const text = issueDescription(issue) || String(issue.displaySummary ?? "").trim();
+  const text =
+    String(issue.firstMessage ?? "").trim()
+    || issueDescription(issue)
+    || String(issue.displaySummary ?? "").trim();
   if (!text) return "Issue";
   return text.split("\n")[0].slice(0, 120);
 }

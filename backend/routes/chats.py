@@ -36,7 +36,7 @@ def _issue_dto(
 ) -> dict[str, Any]:
     summary = (issue.summary or "").strip() or None
     preview = (first_message or "").strip() or None
-    display_summary = summary or preview
+    display_summary = preview or summary
     return {
         "id": issue.id,
         "userId": issue.user_id,

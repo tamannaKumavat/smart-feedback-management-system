@@ -96,33 +96,29 @@ def list_issues(db: Session, user_id: str) -> list[Issue]:
 def first_messages_by_issue(
     db: Session, issue_ids: list[str]
 ) -> dict[str, str]:
-    """First user message per issue; falls back to earliest message of any sender."""
+    """Earliest user-authored message per issue (ignores AI messages)."""
     if not issue_ids:
         return {}
 
     stmt = (
         select(Message)
-        .where(Message.issue_id.in_(issue_ids))
+        .where(
+            Message.issue_id.in_(issue_ids),
+            Message.sender == SENDER_USER,
+        )
         .order_by(Message.issue_id, Message.created_at, Message.id)
     )
     messages = list(db.execute(stmt).scalars())
 
-    user_first: dict[str, str] = {}
-    any_first: dict[str, str] = {}
+    result: dict[str, str] = {}
     for msg in messages:
-        content = (msg.content or "").strip()
-        if not content:
+        if msg.issue_id in result:
             continue
-        if msg.issue_id not in any_first:
-            any_first[msg.issue_id] = content
-        if msg.sender == SENDER_USER and msg.issue_id not in user_first:
-            user_first[msg.issue_id] = content
+        content = (msg.content or "").strip()
+        if content:
+            result[msg.issue_id] = content
 
-    return {
-        issue_id: user_first.get(issue_id) or any_first.get(issue_id, "")
-        for issue_id in issue_ids
-        if user_first.get(issue_id) or any_first.get(issue_id)
-    }
+    return result
 
 
 def mark_as_draft(db: Session, issue_id: str, user_id: str) -> Issue:
