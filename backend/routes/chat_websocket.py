@@ -63,6 +63,7 @@ async def websocket_endpoint(
     token: str | None = Query(default=None),
     chat_id: str | None = Query(default=None),
 ):
+    print(f"chat id: {chat_id}")
     db = SessionLocal()
     try:
         # Authenticate
@@ -195,7 +196,12 @@ async def websocket_endpoint(
                         summary = chunk["data"]["end_node"].get(
                             "final_user_response", ""
                         )
-                        chat_service.close_issue(db, issue, summary=summary or None)
+                        is_rag_answered = chunk.get("data", {}).get("end_node", {}).get("rag_user_assessment", "") == "yes"
+                        if is_rag_answered:
+                            chat_service.update_issue(db, issue, summary=summary or None)
+                        else:
+                            chat_service.update_issue(db, issue, summary=summary or None, issue_status="active")
+
                         await websocket.send_text(json.dumps({"type": "chat_closed"}))
                         should_run = False
 
