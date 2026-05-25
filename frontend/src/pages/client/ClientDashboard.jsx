@@ -110,7 +110,9 @@ export default function ClientDashboard() {
 
   const rows = useMemo(
     () =>
-      issues.map((issue) => ({
+      issues
+        .filter((issue) => String(issue.status || "").toLowerCase() !== "draft")
+        .map((issue) => ({
         id: issue.id,
         date: formatDate(issue.createdAt),
         ticket: issueRowTitle(issue),
