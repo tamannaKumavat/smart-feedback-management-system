@@ -29,7 +29,7 @@ from config import (
     JIRA_TEAM_ID_SUPPORT,
 )
 from db import SessionLocal
-from models.chat import Issue, Ticket
+from models.chat import ISSUE_STATUS_CLOSED, Issue, Ticket
 from services.ticket_rag_ingest import is_done_status, upsert_done_ticket_rag_chunk
 
 DATASET_PATH = Path(__file__).resolve().parents[1] / "data" / "jira_ticket_dataset.json"
@@ -598,6 +598,11 @@ def update_ticket_db_from_issue(issue: dict[str, Any]) -> dict[str, Any]:
 
         latest_response = latest_comment_text(issue)
         response_comments = jira_comment_snapshots(issue)
+        jira_status = (fields.get("status") or {}).get("name")
+        jira_status_category = (
+            ((fields.get("status") or {}).get("statusCategory") or {}).get("name")
+            or ""
+        ).lower()
 
         set_if_changed("summary", fields.get("summary"))
         set_if_changed(
@@ -605,7 +610,7 @@ def update_ticket_db_from_issue(issue: dict[str, Any]) -> dict[str, Any]:
             adf_to_text(fields.get("description", "")).strip(),
         )
         set_if_changed("priority", (fields.get("priority") or {}).get("name"))
-        set_if_changed("status", (fields.get("status") or {}).get("name"))
+        set_if_changed("status", jira_status)
         set_if_changed("response", latest_response)
         set_if_changed("response_comments", response_comments)
         set_issue_if_changed("response", latest_response)
@@ -626,6 +631,12 @@ def update_ticket_db_from_issue(issue: dict[str, Any]) -> dict[str, Any]:
         )
         assignee = fields.get("assignee") or {}
         set_if_changed("assignee", assignee.get("displayName") or assignee.get("accountId"))
+
+        if linked_issue is not None and (
+            is_done_status(jira_status) or jira_status_category == "done"
+        ):
+            set_issue_if_changed("status", ISSUE_STATUS_CLOSED)
+            set_issue_if_changed("resolved_by", "human")
 
         if changed_fields:
             db.commit()

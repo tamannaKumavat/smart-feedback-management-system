@@ -153,7 +153,9 @@ def list_drafts(
     return {
         "ok": True,
         "drafts": [
-            _issue_dto(d, first_message=first_by_issue.get(d.id)) for d in drafts
+            _issue_dto(d, first_message=first_by_issue[d.id])
+            for d in drafts
+            if d.id in first_by_issue
         ],
     }
 
@@ -178,7 +180,9 @@ def list_issues(
     return {
         "ok": True,
         "issues": [
-            _issue_dto(i, first_message=first_by_issue.get(i.id)) for i in issues
+            _issue_dto(i, first_message=first_by_issue[i.id])
+            for i in issues
+            if i.id in first_by_issue
         ],
     }
 
