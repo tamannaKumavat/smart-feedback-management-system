@@ -576,7 +576,7 @@ class SmartFeedbackWorkflow:
         else:
             prev_question = state.get("engagement_response") or "Please clarify your request."
             _debug("[workflow] node=engagement_with_user waiting for clarification interrupt")
-            answer = interrupt(prev_question)
+            answer = interrupt(prev_question + "\nPlease clarify!")
             state["user_query"] = answer
             chain = (
                 chat_template_engagement_followup

@@ -46,7 +46,7 @@ class ChatError(Exception):
 
 
 def create_chat(db: Session, user_id: str) -> Issue:
-    issue = Issue(user_id=user_id, status=ISSUE_STATUS_ACTIVE)
+    issue = Issue(user_id=user_id, status=ISSUE_STATUS_DRAFT)
     db.add(issue)
     db.commit()
     db.refresh(issue)
@@ -139,7 +139,7 @@ def resume_draft(db: Session, issue_id: str, user_id: str) -> Issue:
         raise ChatError("Cannot resume a closed Issue", http_status=409)
     if issue.status != ISSUE_STATUS_DRAFT:
         return issue
-    issue.status = ISSUE_STATUS_ACTIVE
+    issue.status = ISSUE_STATUS_DRAFT
     db.commit()
     db.refresh(issue)
     return issue
@@ -191,8 +191,6 @@ def add_message(
 def assert_can_send_user_message(issue: Issue) -> None:
     if issue.status == ISSUE_STATUS_CLOSED:
         raise ChatError("Issue is closed", http_status=409)
-    if issue.status == ISSUE_STATUS_DRAFT:
-        raise ChatError("Resume the Issue before sending messages", http_status=409)
 
 
 def record_user_message(db: Session, issue: Issue, content: str) -> Message:
@@ -266,12 +264,13 @@ def confirm_summary(
     return issue, ticket
 
 
-def close_issue(db: Session, issue: Issue, summary: str | None = None) -> Issue:
-    issue.status = ISSUE_STATUS_CLOSED
+def update_issue(db: Session, issue: Issue, summary: str | None = None, issue_status: str = ISSUE_STATUS_CLOSED) -> Issue:
+    issue.status = issue_status
     if summary:
         issue.summary = summary
     db.commit()
     db.refresh(issue)
+    db.commit()
     return issue
 
 

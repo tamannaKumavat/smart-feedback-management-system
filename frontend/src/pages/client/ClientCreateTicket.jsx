@@ -525,17 +525,16 @@ export default function ClientCreateTicket() {
     async function initializeChat() {
       try {
         if (chatId) {
-          // Resume existing chat from URL parameter
+          // Resume existing chat
           const [resumed, history] = await Promise.all([
             resumeChat(chatId),
             getMessages(chatId),
           ]);
-
           if (cancelled) return;
           setChat(resumed.chat);
           setMessages(history.messages || []);
-        } else {
-          // Create brand new chat
+        } else if (!chat) {  // Only create if no chat exists
+          console.log("Create chat - init chat");
           const created = await createChat();
           if (cancelled) return;
           setChat(created.chat);
@@ -548,11 +547,8 @@ export default function ClientCreateTicket() {
     }
 
     initializeChat();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [chatId]); // Only depends on chatId from URL
+    return () => { cancelled = true; };
+  }, [chatId, chat]); // Add `chat` as a dependency
 
   // Step 2: Keep chatRef in sync with chat state
   useEffect(() => {
@@ -838,6 +834,7 @@ export default function ClientCreateTicket() {
     setAiWaitingForInput(true);
     setPendingOptions(null);
     setSearchParams({});
+    setChat(null); // Triggers useEffect to create a new chat
 
     try {
       const created = await createChat();
