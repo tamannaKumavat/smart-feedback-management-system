@@ -204,6 +204,94 @@ function Avatar({ src, label }) {
   );
 }
 
+function AnswerFoundModal({ open, onClose }) {
+  useEffect(() => {
+    if (!open) return undefined;
+    function onKeyDown(e) {
+      if (e.key === "Escape") onClose?.();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
+  return (
+    <AnimatePresence>
+      {open ? (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="answer-found-title"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <motion.button
+            type="button"
+            className="absolute inset-0 bg-slate-900/40"
+            aria-label="Close answer found dialog"
+            onClick={onClose}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          />
+          <motion.div
+            className="relative z-10 w-full max-w-[420px] overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_24px_60px_-12px_rgba(15,23,42,0.28)]"
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.94, y: 12 }}
+            transition={{ type: "spring", stiffness: 360, damping: 26 }}
+          >
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-teal-50/90 to-transparent" />
+            <div className="relative px-6 pb-6 pt-8">
+              <motion.div
+                className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-teal-100 text-teal-600 ring-8 ring-teal-50"
+                initial={{ scale: 0, rotate: -20 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: "spring", stiffness: 420, damping: 18, delay: 0.08 }}
+              >
+                <FiSmile className="text-[26px]" aria-hidden />
+              </motion.div>
+              <motion.h2
+                id="answer-found-title"
+                className="mt-5 text-center text-[20px] font-semibold tracking-tight text-[#0f172a]"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.14, duration: 0.28 }}
+              >
+                Glad we could help
+              </motion.h2>
+              <motion.p
+                className="mt-2 text-center text-[14px] leading-relaxed text-slate-600"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2, duration: 0.28 }}
+              >
+                We&apos;re glad you found an answer. No ticket was needed — start a new chat anytime if you need more help.
+              </motion.p>
+              <motion.div
+                className="mt-7"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.26, duration: 0.28 }}
+              >
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="inline-flex w-full items-center justify-center rounded-full bg-[#020c3d] px-4 py-2.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#0a1a5c] active:scale-[0.98]"
+                >
+                  New Chat
+                </button>
+              </motion.div>
+            </div>
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  );
+}
+
 function TicketSuccessModal({ open, onClose, onGoDashboard }) {
   useEffect(() => {
     if (!open) return undefined;
@@ -347,6 +435,7 @@ export default function ClientCreateTicket() {
   const [waitingForResponse, setWaitingForResponse] = useState(false);
   const [ticketCompleted, setTicketCompleted] = useState(false);
   const [ticketSuccessOpen, setTicketSuccessOpen] = useState(false);
+  const [answerFoundOpen, setAnswerFoundOpen] = useState(false);
   // Refs
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -357,11 +446,22 @@ export default function ClientCreateTicket() {
   const wsLeavingRef = useRef(false);
   const ticketCompletedRef = useRef(false);
 
-  const markTicketCompleted = useCallback(() => {
+  const markTicketSubmitted = useCallback(() => {
     ticketCompletedRef.current = true;
     setTicketCompleted(true);
     setWaitingForResponse(false);
     setTicketSuccessOpen(true);
+    setAnswerFoundOpen(false);
+    setAiWaitingForInput(false);
+    setPendingOptions(null);
+  }, []);
+
+  const markAnswerFound = useCallback(() => {
+    ticketCompletedRef.current = true;
+    setTicketCompleted(true);
+    setWaitingForResponse(false);
+    setAnswerFoundOpen(true);
+    setTicketSuccessOpen(false);
     setAiWaitingForInput(false);
     setPendingOptions(null);
   }, []);
@@ -550,7 +650,7 @@ export default function ClientCreateTicket() {
               createdAt: new Date().toISOString(),
             }]);
             if (isTicketCreatedMessage(data.content)) {
-              markTicketCompleted();
+              markTicketSubmitted();
             } else if (isSupportTicketContent(data.content)) {
               // Ticket preview often arrives before a follow-up options message.
               setWaitingForResponse(true);
@@ -564,9 +664,8 @@ export default function ClientCreateTicket() {
             setAiWaitingForInput(false);
             setPendingOptions(null);
             if (!ticketCompletedRef.current) {
-              markTicketCompleted();
+              markAnswerFound();
             } else {
-              ticketCompletedRef.current = true;
               setTicketCompleted(true);
             }
           }
@@ -608,7 +707,7 @@ export default function ClientCreateTicket() {
         preventReconnect: wsLeavingRef.current,
       });
     };
-  }, [chat, token, closeWebSocketConnection, markTicketCompleted]);
+  }, [chat, token, closeWebSocketConnection, markTicketSubmitted, markAnswerFound]);
 
   async function handleOptionChoice(option, messageId) {
     if (!option || sending || !pendingOptions) return;
@@ -731,6 +830,7 @@ export default function ClientCreateTicket() {
     ticketCompletedRef.current = false;
     setTicketCompleted(false);
     setTicketSuccessOpen(false);
+    setAnswerFoundOpen(false);
     setWaitingForResponse(false);
     setMessages([]);
     setMessageInput("");
@@ -977,6 +1077,10 @@ export default function ClientCreateTicket() {
         </form>
       </section>
 
+      <AnswerFoundModal
+        open={answerFoundOpen}
+        onClose={handleNewChat}
+      />
       <TicketSuccessModal
         open={ticketSuccessOpen}
         onClose={handleNewChat}
